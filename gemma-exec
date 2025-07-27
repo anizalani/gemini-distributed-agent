@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# gemma-exec - A wrapper script to execute the Gemini Distributed Agent
+#              with instructions from a file, prepending context-aware
+#              instructions for the agent.
+#
+
+# --- Configuration & Setup ---
+# Get the absolute path of the directory where this script is located
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PYTHON_EXEC="$PROJECT_ROOT/venv/bin/python"
+AGENT_SCRIPT="$PROJECT_ROOT/gemini_agent.py"
+
+# --- Argument Parsing ---
+if [[ "$1" != "--file" ]] || [[ -z "$2" ]]; then
+  echo "Usage: gemma-exec --file <path_to_instruction_file>"
+  exit 1
+fi
+
+INSTRUCTION_FILE="$2"
+
+if [ ! -f "$INSTRUCTION_FILE" ]; then
+  echo "Error: Instruction file not found at '$INSTRUCTION_FILE'"
+  exit 1
+fi
+
+# --- Preamble Definition ---
+# This text is prepended to the user's instructions to guide the agent.
+CONTEXT_PREAMBLE="You are a helpful assistant with access to a long-term memory database. Your task history for today is already loaded as context. Before you respond to the user's request below, please first review your previous interactions from today to understand the full context of the ongoing task.
+
+Here is the user's immediate request:
+---"
+
+# --- Instruction Combination ---
+# Read the user's instruction file
+USER_INSTRUCTIONS=$(cat "$INSTRUCTION_FILE")
+
+# Combine the preamble and the user's instructions
+FINAL_PROMPT="$CONTEXT_PREAMBLE
+
+$USER_INSTRUCTIONS"
+
+# --- Execution ---
+echo "--- Running Gemini Agent ---"
+echo "Instruction File: $INSTRUCTION_FILE"
+echo "----------------------------"
+
+# Execute the agent with the final, combined prompt
+"$PYTHON_EXEC" "$AGENT_SCRIPT" "$FINAL_PROMPT"
+
+echo "----------------------------"
+echo "--- Agent run complete ---"
+
+exit 0

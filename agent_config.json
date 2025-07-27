@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "weak": {
+      "allowlist": [
+        "ls", "docker", "git", "echo", "cat", "python", "pip", 
+        "grep", "find", "head", "tail", "sed", "awk"
+      ]
+    },
+    "superuser": {
+      "denylist": [
+        "rm", "mv", "sudo", "su", "chmod", "chown", "reboot", "shutdown"
+      ]
+    }
+  }
+}

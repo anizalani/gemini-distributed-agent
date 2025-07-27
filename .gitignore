@@ -1,4 +1,5 @@
-# Virtual Environment
+# Python Virtual Environment
+# This directory contains the project's dependencies and is not version controlled.
 venv/
 *.pyc
 __pycache__/

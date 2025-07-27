@@ -1,55 +1,69 @@
-
 import os
-import psycopg2
+import db_utils
+import logging
+from dotenv import load_dotenv
 
-def populate_keys():
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def populate_keys_from_env():
     """
-    Reads API keys from an environment file and populates the api_keys table in the database.
+    Reads API keys from the file specified by the API_KEYS_FILE environment variable
+    and populates them into the database.
     """
-    db_name = "gemini_distributed_agent"
-    db_user = "rootuser"
-    db_pass = "gvh!qkm0yfd6CFY4kuv"
-    db_host = "localhost"
-    db_port = "5432"
+    # Load environment variables from the project's .env file
+    # This ensures that API_KEYS_FILE and POSTGRES_ENV_FILE are available
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(dotenv_path=dotenv_path)
+    
+    keys_file = os.getenv("API_KEYS_FILE")
+    if not keys_file:
+        logging.error("API_KEYS_FILE not set in environment. Aborting.")
+        return
 
-    keys_file = "/home/ubuntu/countrycat/gemini/credentials/gemini-api-keys.env"
+    if not os.path.exists(keys_file):
+        logging.error(f"Keys file not found at: {keys_file}. Aborting.")
+        return
 
-    conn = None  # Initialize conn to None
+    logging.info(f"Reading keys from: {keys_file}")
+    
+    with open(keys_file, 'r') as f:
+        # Using a dictionary to prevent duplicate key names
+        keys = {}
+        for line in f:
+            if '=' in line:
+                name, value = line.strip().split('=', 1)
+                keys[name] = value
+
+    if not keys:
+        logging.warning("No keys found in the file.")
+        return
+
+    # Get a database connection using the centralized utility
+    conn = db_utils.get_db_connection()
+    if not conn:
+        logging.error("Failed to connect to the database. Aborting.")
+        return
+    
     try:
-        conn = psycopg2.connect(
-            dbname=db_name,
-            user=db_user,
-            password=db_pass,
-            host=db_host,
-            port=db_port
-        )
-        cur = conn.cursor()
-
-        with open(keys_file, 'r') as f:
-            for line in f:
-                if '=' in line:
-                    key_name, key_value = line.strip().split('=', 1)
-                    # Check if key_name already exists
-                    cur.execute("SELECT id FROM api_keys WHERE key_name = %s", (key_name,))
-                    if cur.fetchone() is None:
-                        cur.execute(
-                            "INSERT INTO api_keys (key_name, key_value) VALUES (%s, %s)",
-                            (key_name, key_value)
-                        )
-                        print(f"Inserted key: {key_name}")
-                    else:
-                        print(f"Key '{key_name}' already exists, skipping.")
-
-
-        conn.commit()
-        cur.close()
-
-    except psycopg2.Error as e:
-        print(f"Database error: {e}")
-
+        with conn.cursor() as cur:
+            for name, value in keys.items():
+                cur.execute("SELECT key_name FROM api_keys WHERE key_name = %s;", (name,))
+                if cur.fetchone():
+                    logging.info(f"Key '{name}' already exists. Skipping.")
+                else:
+                    cur.execute(
+                        "INSERT INTO api_keys (key_name, key_value) VALUES (%s, %s);",
+                        (name, value)
+                    )
+                    logging.info(f"Added new key: {name}")
+            conn.commit()
+            logging.info("Successfully populated/updated keys in the database.")
+    except Exception as e:
+        logging.error(f"An error occurred during database operation: {e}")
+        conn.rollback()
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 if __name__ == "__main__":
-    populate_keys()
+    populate_keys_from_env()

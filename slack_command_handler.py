@@ -11,10 +11,14 @@ import requests
 import logging
 
 # --- Configuration ---
-# IMPORTANT: Replace this with your actual Slack Signing Secret
-SLACK_SIGNING_SECRET = "YOUR_SLACK_SIGNING_SECRET_HERE"
-GEMINI_SCRIPT_PATH = "/home/ubuntu/gemini-distributed-agent/run_gemini_contextual.py"
-LOG_FILE = "/home/ubuntu/gemini-distributed-agent/slack_handler.log"
+# Load environment variables to get the Slack secret and script path
+from dotenv import load_dotenv
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
+GEMINI_SCRIPT_PATH = os.getenv("GEMINI_SCRIPT_PATH", "/home/ubuntu/gemini-distributed-agent/run_gemini_contextual.py")
+LOG_FILE = os.getenv("SLACK_HANDLER_LOG_FILE", "/home/ubuntu/gemini-distributed-agent/slack_handler.log")
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -38,6 +42,10 @@ def verify_slack_request(request):
 
     # Prevent replay attacks
     if abs(time.time() - int(timestamp)) > 60 * 5:
+        return False
+
+    if not SLACK_SIGNING_SECRET:
+        logging.error("SLACK_SIGNING_SECRET is not set. Cannot verify request.")
         return False
 
     req_body = request.get_data(as_text=True)

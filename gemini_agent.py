@@ -5,8 +5,10 @@ import subprocess
 import json
 import sys
 import os
-
-import os
+import argparse
+import re
+import threading
+import itertools
 from dotenv import load_dotenv
 
 # --- Configuration ---
@@ -28,17 +30,58 @@ logging.basicConfig(
     ]
 )
 
-def run_gemini_command(api_key, prompt, context):
+# --- UX Enhancements ---
+class Spinner:
+    """A simple spinner class to show activity."""
+    def __init__(self, message="Thinking..."):
+        self.spinner = itertools.cycle(['-', '/', '|', '\\'])
+        self.message = message
+        self.running = False
+        self.thread = None
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._spin)
+        self.thread.start()
+
+    def stop(self):
+        if self.thread and self.running:
+            self.running = False
+            self.thread.join()
+            # Clear the spinner line
+            sys.stdout.write('\r' + ' ' * (len(self.message) + 2) + '\r')
+            sys.stdout.flush()
+
+    def _spin(self):
+        while self.running:
+            sys.stdout.write('\r' + self.message + ' ' + next(self.spinner))
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+def run_gemini_command(api_key, prompt, context_history, base_context=None):
+
     """
-    Runs the Gemini CLI with the provided API key and prompt.
-    Returns the response and token count.
+    Runs the Gemini CLI with the provided API key, prompt, and context.
     """
     logging.info(f"Executing Gemini command with key ending in '...{api_key[-4:]}'")
     
     cmd = ["gemini"]
     
+    # Construct the full prompt with history and base context
+    full_prompt = ""
+    if base_context:
+        full_prompt += "--- Start of Base Context ---\n"
+        full_prompt += json.dumps(base_context, indent=2)
+        full_prompt += "\n--- End of Base Context ---\n\n"
+
+    for interaction in context_history:
+        full_prompt += f"Previous Prompt: {interaction['prompt']}\n"
+        full_prompt += f"Previous Response: {interaction['response']}\n\n"
+    full_prompt += f"Current Prompt: {prompt}"
+
+    spinner = Spinner("Communicating with Gemini...")
+    spinner.start()
     try:
-        # Set the API key in the environment for the subprocess
         env = os.environ.copy()
         env["GEMINI_API_KEY"] = api_key
         
@@ -48,34 +91,134 @@ def run_gemini_command(api_key, prompt, context):
             text=True, 
             check=True, 
             env=env,
-            input=prompt
+            input=full_prompt
         )
         
+        spinner.stop()
         response = result.stdout.strip()
-        token_count = len(prompt.split()) + len(response.split())
+        token_count = len(full_prompt.split()) + len(response.split())
 
         logging.info(f"Gemini command successful. Response: {response}, Token usage: {token_count}")
         return response, token_count
 
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        spinner.stop()
         logging.error(f"Gemini command failed: {e.stderr}")
         return None, 0
     except json.JSONDecodeError as e:
+        spinner.stop()
         logging.error(f"Failed to decode Gemini CLI JSON output: {e}")
         return result.stdout.strip(), 0
 
-import sys
+def parse_command_from_response(response):
+    """
+    Parses a shell command from a fenced code block (```bash) in the response.
+    """
+    match = re.search(r"```bash\n(.*?)\n```", response, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
+
+def execute_shell_command(command, permissions_level, is_interactive):
+    """
+    Executes a shell command after validating it and streams the output.
+    """
+    logging.info(f"Attempting to execute shell command: {command} with '{permissions_level}' permissions.")
+    command_base = command.split()[0]
+
+    # --- Permission Check ---
+    can_execute = False
+    if permissions_level == 'superuser':
+        if command_base in DENIED_COMMANDS:
+            error_message = f"Execution denied: Command '{command_base}' is on the superuser denylist."
+            logging.error(error_message)
+            return error_message
+        can_execute = True
+    else: # 'weak' mode is the default
+        if command_base in ALLOWED_COMMANDS:
+            can_execute = True
+        elif is_interactive:
+            logging.warning(f"Command '{command_base}' is not on the weak allowlist.")
+            user_input = input(f"Allow execution of this command just once? (y/n): ")
+            if user_input.lower() == 'y':
+                can_execute = True
+        
+        if not can_execute:
+            error_message = f"Execution denied: Command '{command_base}' is not on the allowlist and was not approved by the user."
+            logging.error(error_message)
+            return error_message
+
+    # --- Execution & Streaming ---
+    logging.info(f"Command '{command_base}' approved for execution. Streaming output...")
+    try:
+        process = subprocess.Popen(
+            command, shell=True, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        
+        full_stdout = ""
+        full_stderr = ""
+
+        print("--- Command Output (Streaming) ---")
+        while True:
+            output = process.stdout.readline()
+            if output:
+                print(output.strip())
+                full_stdout += output
+            
+            error = process.stderr.readline()
+            if error:
+                print(error.strip(), file=sys.stderr)
+                full_stderr += error
+
+            if process.poll() is not None and not output and not error:
+                break
+        print("--- End of Command Output ---")
+        
+        return f"STDOUT:\n{full_stdout}\nSTDERR:\n{full_stderr}"
+
+    except Exception as e:
+        error_output = f"Failed to execute command: {e}"
+        logging.error(error_output)
+        return error_output
+
 
 def main():
-    """Main function for the interactive Gemini agent."""
-    if len(sys.argv) < 2:
-        print("Usage: python gemini_agent.py <prompt>")
+    """Main function for the interactive and agentic Gemini agent."""
+    parser = argparse.ArgumentParser(description="Gemini Distributed Agent")
+    parser.add_argument('prompt', type=str, help="The initial prompt or instruction.")
+    parser.add_argument('--interactive', action='store_true', help="Ask for confirmation before executing tasks.")
+    parser.add_argument('--agentic', action='store_true', help="Execute tasks autonomously until completion.")
+    parser.add_argument('--permissions', type=str, default='weak', choices=['weak', 'superuser'], help="Set the permission level for command execution.")
+    parser.add_argument('--task-id', type=str, default=None, help="The specific task ID to resume or use for context.")
+    
+    args = parser.parse_args()
+
+    if args.interactive and args.agentic:
+        print("Error: Cannot use --interactive and --agentic flags simultaneously.")
         return
 
-    prompt = " ".join(sys.argv[1:])
+    # Load permissions from config
+    try:
+        with open('agent_config.json', 'r') as f:
+            config = json.load(f)
+        if args.permissions == 'weak':
+            ALLOWED_COMMANDS = config['permissions']['weak']['allowlist']
+            DENIED_COMMANDS = []
+        elif args.permissions == 'superuser':
+            DENIED_COMMANDS = config['permissions']['superuser']['denylist']
+            ALLOWED_COMMANDS = [] # Not used in superuser mode
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        logging.error(f"Failed to load permissions from agent_config.json: {e}. Defaulting to empty lists.")
+        ALLOWED_COMMANDS = []
+        DENIED_COMMANDS = []
+
+    current_prompt = args.prompt
+    session_context = []
+
+    db_utils.send_slack_notification(f"Agent starting up for prompt: {current_prompt}", level="info")
+    logging.info(f"Agent starting up for prompt: {current_prompt}")
     
-    db_utils.send_slack_notification(f"Agent starting up for prompt: {prompt}", level="info")
-    logging.info(f"Agent starting up for prompt: {prompt}")
     conn = db_utils.get_db_connection()
     if not conn:
         db_utils.send_slack_notification("Agent failed to connect to the database.", level="error")
@@ -83,33 +226,73 @@ def main():
 
     try:
         with conn.cursor() as cur:
-            task_id = db_utils.get_task_id()
-            context = db_utils.get_or_create_task(cur, task_id)
+            # Use the provided task_id or generate a default one
+            task_id = args.task_id if args.task_id else db_utils.get_task_id()
+            logging.info(f"Using task ID: {task_id}")
             
-            key_info = db_utils.get_available_key(cur)
+            # Load the context for the task
+            session_context_data = db_utils.get_or_create_task(cur, task_id)
+            session_context = session_context_data.get('history', [])
             
-            if not key_info:
-                message = "No available API keys. Sleeping for {} minutes.".format(KEY_EXHAUSTED_SLEEP_MINUTES)
-                db_utils.send_slack_notification(message, level="warning")
-                logging.warning(message)
-                time.sleep(KEY_EXHAUSTED_SLEEP_MINUTES * 60)
-                return
+            while True: # Main agent loop
+                key_info = db_utils.get_available_key(cur)
+                if not key_info:
+                    message = f"No available API keys. Sleeping for {KEY_EXHAUSTED_SLEEP_MINUTES} minutes."
+                    db_utils.send_slack_notification(message, level="warning")
+                    logging.warning(message)
+                    time.sleep(KEY_EXHAUSTED_SLEEP_MINUTES * 60)
+                    continue
 
-            key_name, api_key = key_info
-            logging.info(f"Selected API key: {key_name}")
+                key_name, api_key = key_info
+                logging.info(f"Selected API key: {key_name}")
+                db_utils.throttle_if_needed(cur, key_name)
 
-            db_utils.throttle_if_needed(cur, key_name)
+                # Separate base context from history
+                base_context = session_context_data.get('base_context')
+                
+                response, token_count = run_gemini_command(api_key, current_prompt, session_context, base_context)
+                
+                if not response:
+                    logging.error("No response from Gemini. Stopping.")
+                    break
 
-            response, token_count = run_gemini_command(api_key, prompt, context)
+                # Update the history part of the context
+                session_context.append({'prompt': current_prompt, 'response': response})
+                session_context_data['history'] = session_context
 
-            if response and token_count > 0:
-                context['history'].append({'prompt': prompt, 'response': response})
-                db_utils.update_key_and_log_usage(cur, key_name, task_id, token_count, "non_interactive_request")
-                db_utils.update_task_context(cur, task_id, context)
-                db_utils.send_slack_notification(f"Interactive task '{task_id}' completed. Used key '{key_name}' ({token_count} tokens).")
-                print(f"\nResponse: {response}\n")
+                print(f"\nResponse:\n{response}\n")
 
-            conn.commit()
+                db_utils.update_key_and_log_usage(cur, key_name, task_id, token_count, "interactive_request" if args.interactive else "agentic_request" if args.agentic else "single_request")
+                db_utils.check_and_notify_quota_usage(cur, key_name) # Check quota after usage
+                db_utils.update_task_context(cur, task_id, session_context_data) # Save the updated context
+                conn.commit()
+
+                command_to_run = parse_command_from_response(response)
+
+                if not command_to_run:
+                    logging.info("No executable command found in the response. Stopping.")
+                    break
+
+                should_execute = False
+                if args.agentic:
+                    logging.info(f"--- Agentic Mode: Executing command automatically ---")
+                    should_execute = True
+                elif args.interactive:
+                    user_input = input(f"Execute the following command? \n\n{command_to_run}\n\n(y/n): ")
+                    if user_input.lower() == 'y':
+                        should_execute = True
+
+                if should_execute:
+                    command_output = execute_shell_command(command_to_run, args.permissions, args.interactive or args.agentic)
+                    
+                    current_prompt = f"The last command produced this output:\n\n{command_output}\n\nBased on this and our history, what is the next command to continue the task? If the task is complete, respond with only the text 'TASK_COMPLETE'."
+                else:
+                    logging.info("Execution cancelled by user or mode. Stopping.")
+                    break
+                
+                if "TASK_COMPLETE" in response:
+                    logging.info("Task marked as complete by the model. Stopping.")
+                    break
 
     except Exception as e:
         error_message = f"An unexpected error occurred: {e}"

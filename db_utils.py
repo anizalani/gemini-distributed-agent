@@ -9,23 +9,24 @@ import time
 from dotenv import load_dotenv
 
 # --- Configuration ---
-# Load the main .env file from the project root
+# Load the main .env file to get the root paths
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 # Load the PostgreSQL credentials from the path specified in the main .env file
 postgres_env_path = os.getenv("POSTGRES_ENV_FILE")
-if postgres_env_path:
-    load_dotenv(dotenv_path=postgres_env_path)
+if postgres_env_path and os.path.exists(postgres_env_path):
+    # Important: Use override=True to ensure these values are preferred over any
+    # potentially conflicting variables in the main .env file.
+    load_dotenv(dotenv_path=postgres_env_path, override=True)
 else:
-    logging.error("POSTGRES_ENV_FILE not set in .env")
-    # Consider exiting or handling this error appropriately
-    
-DB_NAME = "gemini_distributed_agent"
+    logging.error(f"POSTGRES_ENV_FILE is not set or the file does not exist: {postgres_env_path}")
+
+DB_NAME = os.getenv("POSTGRES_DB", "gemini_distributed_agent")
 DB_USER = os.getenv("POSTGRES_USER")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
-DB_HOST = "localhost"
-DB_PORT = "5432"
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 MIN_REQUEST_INTERVAL_SECONDS = 30
 
 def get_db_connection():
@@ -112,10 +113,27 @@ def update_task_context(cur, task_id, new_context):
                 (json.dumps(new_context), task_id))
     logging.info(f"Updated context for task '{task_id}'.")
 
-def send_slack_notification(message, level="info"):
-    """Sends a notification to a Slack webhook."""
-    webhook_url = "https://hooks.slack.com/services/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"
-    
+def check_and_notify_quota_usage(cur, key_name, threshold=55):
+    """Checks the daily request count for a key and sends a Slack notification if it's near the limit."""
+    cur.execute("SELECT daily_request_count FROM api_keys WHERE key_name = %s;", (key_name,))
+    count = cur.fetchone()[0]
+
+    if count == threshold:
+        message = f"API key '{key_name}' is nearing its daily quota, having made {count} requests."
+        send_slack_notification(message, level="warning")
+        logging.warning(message)
+    elif count >= 60:
+        message = f"API key '{key_name}' has reached its daily quota with {count} requests."
+        send_slack_notification(message, level="error")
+        logging.warning(message)
+
+def send_slack_notification(message, channel=None, pretext=None, level="info"):
+    """Sends a notification to a Slack webhook, with more flexibility."""
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    if not webhook_url or webhook_url == "https://hooks.slack.com/services/YOUR/WEBHOOK/URL":
+        logging.warning("Slack webhook URL not configured. Skipping notification.")
+        return
+
     color = {
         "info": "#36a64f",    # Green
         "warning": "#ffae42", # Orange
@@ -126,13 +144,16 @@ def send_slack_notification(message, level="info"):
         "attachments": [
             {
                 "color": color,
-                "title": f"Gemini Agent Notification ({level.upper()})",
+                "pretext": pretext,
                 "text": message,
                 "ts": datetime.datetime.now().timestamp()
             }
         ]
     }
     
+    if channel:
+        payload['channel'] = channel
+
     try:
         import requests
         response = requests.post(webhook_url, json=payload)

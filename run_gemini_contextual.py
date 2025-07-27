@@ -6,11 +6,15 @@ import subprocess
 import json
 import sys
 import os
+from dotenv import load_dotenv
 
 # --- Configuration ---
-LOG_FILE = "/home/ubuntu/gemini-distributed-agent/agent.log"
-# IMPORTANT: This should point to the base Gemini CLI executable
-GEMINI_CLI_COMMAND = "/usr/local/bin/gemini" 
+# Load environment variables
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+LOG_FILE = os.getenv("CONTEXTUAL_AGENT_LOG_FILE", "/home/ubuntu/gemini-distributed-agent/agent.log")
+GEMINI_CLI_COMMAND = os.getenv("GEMINI_CLI_COMMAND", "/usr/local/bin/gemini") 
 
 # --- Logging Setup ---
 logging.basicConfig(
