@@ -1,22 +1,29 @@
+import os
+from dotenv import load_dotenv
+
+# --- Pre-emptive Environment Loading ---
+# Load environment variables from .env file before anything else.
+# This ensures that all configurations, especially for logging, are available.
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path=dotenv_path)
+else:
+    print(f"Warning: .env file not found at {dotenv_path}. Proceeding with environment variables or defaults.")
+
 import db_utils
 import time
 import logging
 import subprocess
 import json
 import sys
-import os
 import argparse
 import re
 import threading
 import itertools
-from dotenv import load_dotenv
 
 # --- Configuration ---
-# Load environment variables
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=dotenv_path)
-
-PROJECT_ROOT = os.getenv("PROJECT_ROOT", ".")
+# Now, access the environment variables after they've been loaded.
+PROJECT_ROOT = os.getenv("GEMINI_AGENT_ROOT", os.path.dirname(__file__))
 LOG_FILE = os.path.join(PROJECT_ROOT, "agent.log")
 KEY_EXHAUSTED_SLEEP_MINUTES = 5
 
