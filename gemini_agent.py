@@ -24,7 +24,8 @@ import itertools
 # --- Configuration ---
 # Now, access the environment variables after they've been loaded.
 PROJECT_ROOT = os.getenv("GEMINI_AGENT_ROOT", os.path.dirname(__file__))
-LOG_FILE = os.path.join(PROJECT_ROOT, "agent.log")
+# Ensure the log file is always created in the script's directory, which should be writable.
+LOG_FILE = os.path.join(os.path.dirname(__file__), "agent.log")
 KEY_EXHAUSTED_SLEEP_MINUTES = 5
 
 # --- Logging Setup ---
@@ -126,9 +127,9 @@ def parse_command_from_response(response):
         return match.group(1).strip()
     return None
 
-def execute_shell_command(command, permissions_level, is_interactive):
+def execute_shell_command(command, permissions_level, is_interactive, task_id, current_prompt, response):
     """
-    Executes a shell command after validating it and streams the output.
+    Executes a shell command after validating it, logs the action, and streams the output.
     """
     logging.info(f"Attempting to execute shell command: {command} with '{permissions_level}' permissions.")
     command_base = command.split()[0]
@@ -139,7 +140,7 @@ def execute_shell_command(command, permissions_level, is_interactive):
         if command_base in DENIED_COMMANDS:
             error_message = f"Execution denied: Command '{command_base}' is on the superuser denylist."
             logging.error(error_message)
-            return error_message
+            return error_message, False
         can_execute = True
     else: # 'weak' mode is the default
         if command_base in ALLOWED_COMMANDS:
@@ -153,7 +154,19 @@ def execute_shell_command(command, permissions_level, is_interactive):
         if not can_execute:
             error_message = f"Execution denied: Command '{command_base}' is not on the allowlist and was not approved by the user."
             logging.error(error_message)
-            return error_message
+            return error_message, False
+
+    # --- Database Logging ---
+    conn = db_utils.get_db_connection()
+    if conn:
+        with conn.cursor() as cur:
+            agent_mode = "interactive" if is_interactive else "agentic"
+            command_log_id = db_utils.log_command(cur, task_id, current_prompt, response, command, permissions_level, can_execute, agent_mode)
+            conn.commit()
+    else:
+        command_log_id = None
+        logging.error("Could not log command to database; connection failed.")
+
 
     # --- Execution & Streaming ---
     logging.info(f"Command '{command_base}' approved for execution. Streaming output...")
@@ -182,12 +195,26 @@ def execute_shell_command(command, permissions_level, is_interactive):
                 break
         print("--- End of Command Output ---")
         
-        return f"STDOUT:\n{full_stdout}\nSTDERR:\n{full_stderr}"
+        success = process.returncode == 0
+        # Log the output
+        if conn and command_log_id:
+            with conn.cursor() as cur:
+                db_utils.log_command_output(cur, command_log_id, full_stdout, full_stderr, process.returncode, None, success)
+                conn.commit()
+        
+        return f"STDOUT:\n{full_stdout}\nSTDERR:\n{full_stderr}", success
 
     except Exception as e:
         error_output = f"Failed to execute command: {e}"
         logging.error(error_output)
-        return error_output
+        if conn and command_log_id:
+            with conn.cursor() as cur:
+                db_utils.log_command_output(cur, command_log_id, "", str(e), -1, None, False)
+                conn.commit()
+        return error_output, False
+    finally:
+        if conn:
+            conn.close()
 
 
 def main():
@@ -221,6 +248,17 @@ def main():
         DENIED_COMMANDS = []
 
     current_prompt = args.prompt
+    # Check if the prompt is a file path and read its content
+    if os.path.isfile(current_prompt):
+        try:
+            with open(current_prompt, 'r') as f:
+                current_prompt = f.read()
+            logging.info(f"Loaded prompt from file: {args.prompt}")
+        except Exception as e:
+            logging.error(f"Failed to read prompt from file {args.prompt}: {e}")
+            print(f"Error: Could not read file '{args.prompt}'. Please check the path and permissions.")
+            return
+            
     session_context = []
 
     db_utils.send_slack_notification(f"Agent starting up for prompt: {current_prompt}", level="info")
@@ -231,18 +269,19 @@ def main():
         db_utils.send_slack_notification("Agent failed to connect to the database.", level="error")
         return
 
+    redis_conn = db_utils.get_redis_connection()
+
     try:
         with conn.cursor() as cur:
             # Use the provided task_id or generate a default one
             task_id = args.task_id if args.task_id else db_utils.get_task_id()
             logging.info(f"Using task ID: {task_id}")
             
-            # Load the context for the task
+            # Get the task, which now just ensures the task entry exists.
             session_context_data = db_utils.get_or_create_task(cur, task_id)
-            session_context = session_context_data.get('history', [])
             
             while True: # Main agent loop
-                key_info = db_utils.get_available_key(cur)
+                key_info = db_utils.get_available_key(cur, redis_conn)
                 if not key_info:
                     message = f"No available API keys. Sleeping for {KEY_EXHAUSTED_SLEEP_MINUTES} minutes."
                     db_utils.send_slack_notification(message, level="warning")
@@ -257,21 +296,22 @@ def main():
                 # Separate base context from history
                 base_context = session_context_data.get('base_context')
                 
+                # Load the history for the task using the new relational method
+                session_context = db_utils.get_task_history(cur, task_id)
+
                 response, token_count = run_gemini_command(api_key, current_prompt, session_context, base_context)
                 
                 if not response:
                     logging.error("No response from Gemini. Stopping.")
                     break
 
-                # Update the history part of the context
-                session_context.append({'prompt': current_prompt, 'response': response})
-                session_context_data['history'] = session_context
+                # Add the new interaction to the relational history
+                db_utils.add_interaction_to_history(cur, task_id, current_prompt, response)
 
                 print(f"\nResponse:\n{response}\n")
 
                 db_utils.update_key_and_log_usage(cur, key_name, task_id, token_count, "interactive_request" if args.interactive else "agentic_request" if args.agentic else "single_request")
                 db_utils.check_and_notify_quota_usage(cur, key_name) # Check quota after usage
-                db_utils.update_task_context(cur, task_id, session_context_data) # Save the updated context
                 conn.commit()
 
                 command_to_run = parse_command_from_response(response)
@@ -290,9 +330,19 @@ def main():
                         should_execute = True
 
                 if should_execute:
-                    command_output = execute_shell_command(command_to_run, args.permissions, args.interactive or args.agentic)
+                    command_output, success = execute_shell_command(
+                        command_to_run, 
+                        args.permissions, 
+                        args.interactive or args.agentic,
+                        task_id,
+                        current_prompt,
+                        response
+                    )
                     
-                    current_prompt = f"The last command produced this output:\n\n{command_output}\n\nBased on this and our history, what is the next command to continue the task? If the task is complete, respond with only the text 'TASK_COMPLETE'."
+                    if success:
+                        current_prompt = f"The last command was successful. The output was:\n\n{command_output}\n\nBased on this and our history, what is the next command to continue the task? If the task is complete, respond with only the text 'TASK_COMPLETE'."
+                    else:
+                        current_prompt = f"The last command failed. The output was:\n\n{command_output}\n\nBased on this and our history, what is the next command to continue the task? If the task is complete, respond with only the text 'TASK_COMPLETE'."
                 else:
                     logging.info("Execution cancelled by user or mode. Stopping.")
                     break

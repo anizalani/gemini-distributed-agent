@@ -1,101 +1,90 @@
 # Gemini Distributed Agent
 
-The Gemini Distributed Agent is a powerful, database-backed system for interacting with the Gemini CLI. It is designed for robust, continuous operation by intelligently managing multiple API keys, maintaining conversational context, and providing a flexible interface for both interactive and automated tasks.
+The Gemini Distributed Agent is a powerful, database-backed system for running Google's Gemini model in a persistent, multi-agent environment. It features a relational database for logging, Redis caching for performance, and a web UI for real-time monitoring.
 
-## Features
+---
 
--   **Automated API Key Rotation:** Cycles through a pool of API keys stored in a database to avoid rate limits and daily quotas.
--   **Persistent Context:** Saves conversation history in a PostgreSQL database, allowing the agent to resume tasks with full context, even across different machines.
--   **Usage Tracking:** Logs all API requests and token usage for auditing and performance monitoring.
--   **Flexible Execution Modes:** Supports interactive, agentic (autonomous), and single-request modes.
--   **Customizable Permissions:** Features a configurable permission system to control which shell commands the agent can execute.
--   **Slack Notifications:** Can send real-time notifications for important events like key exhaustion or errors.
--   **Simplified Alias:** Comes with a pre-configured `gemma` command for easy, system-wide access.
+## ✨ Features
 
-## Setup
+- **Agentic & Interactive Modes**: Run the agent in fully autonomous mode (`--agentic`) or have it request confirmation before executing commands (`--interactive`).
+- **Relational Database Backend**: All actions are logged to a PostgreSQL database, providing a complete audit trail.
+    - `tasks`: High-level information about each task.
+    - `interactions`: A complete history of every prompt and response.
+    - `command_log`: A log of every command the agent attempts to execute.
+    - `api_keys`: Manages the status and usage of all API keys.
+- **Redis Caching**: API key availability is cached in Redis to minimize database queries and improve performance.
+- **Web UI for Monitoring**: A built-in Flask web application provides a real-time view into the agent's operations.
+    - **Usage Logs**: View the `usage_log` table.
+    - **Tasks**: View the `tasks` table.
+    - **API Keys**: Monitor the status of all API keys.
+    - **Interactions**: See the full conversation history for all tasks.
+    - **Command Log**: Review every command the agent has run.
 
-1.  **Environment Configuration:** The project is configured through a central `.env` file. Copy the example file and update it with your environment's specific paths:
+---
+
+## 🚀 Setup & Installation
+
+1.  **Clone the Repository**
     ```bash
-    cp .env.example .env
-    # Edit .env with your database and API key file paths
+    git clone <repository-url>
+    cd gemini-distributed-agent
     ```
 
-2.  **Database:** The agent requires a PostgreSQL database. Ensure the path to your database credentials file is set in the `POSTGRES_ENV_FILE` variable in the main `.env` file.
-
-3.  **API Keys:** The path to your Gemini API keys file must be set in the `API_KEYS_FILE` variable. The key file should contain one key per line in the format `KEY_NAME=KEY_VALUE`.
-
-4.  **Populate Keys:** Once your `.env` file is configured, populate the database with your API keys by running:
+2.  **Create a Virtual Environment**
     ```bash
-    python3 populate_keys.py
+    python3 -m venv venv
+    source venv/bin/activate
     ```
 
-5.  **Dependencies:** Install the required Python packages:
+3.  **Install Dependencies**
     ```bash
     pip install -r requirements.txt
     ```
 
+4.  **Configure Environment Variables**
+    - Copy `.env.example` to `.env` and fill in the values.
+    - Copy `.postgres.env.example` to `.postgres.env` and fill in your database credentials.
+
+---
+
 ## Usage
 
-The primary way to interact with the agent is through the `gemma` command, which is a system-wide alias for the `gemma-exec` script.
+### Running the Agent
 
-### The `gemma` Command
-
-The `gemma` command simplifies interaction by automatically providing the agent with its necessary operational context. You provide the task instructions via a file.
+The agent is run using the `gemma` command, which is an alias for the `gemini_agent.py` script.
 
 ```bash
-gemma --file /path/to/your/instructions.md
-```
-
-The agent will process the instructions from the file, using its long-term memory to maintain context from previous interactions.
-
-### Direct Script Execution & Command-Line Flags
-
-For more advanced use cases, you can run the agent script directly. This allows you to use command-line flags to control its behavior.
-
-**Syntax:**
-```bash
-python3 gemini_agent.py "<prompt>" [flags]
+gemma [PROMPT] [OPTIONS]
 ```
 
 **Example:**
 ```bash
-python3 gemini_agent.py "Summarize the attached document." --file /path/to/document.txt --interactive
+gemma "Refactor the web_ui.py script to use websockets." --agentic --permissions superuser
 ```
 
-#### **Command-Line Flags:**
+**Arguments & Options:**
 
-| Flag              | Description                                                                                                     |
-| ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| `prompt`          | (Required) The initial prompt or instruction for the agent.                                                     |
-| `--interactive`   | If set, the agent will ask for user confirmation before executing any shell commands.                             |
-| `--agentic`       | If set, the agent will execute shell commands autonomously until the task is complete.                            |
-| `--permissions`   | Sets the permission level for command execution. Choices: `weak` (default) or `superuser`.                        |
-| `--task-id`       | Specifies a task ID to resume. If not provided, a new one is generated based on the hostname and date.            |
+| Argument      | Description                                                                                             |
+|---------------|---------------------------------------------------------------------------------------------------------|
+| `prompt`      | The initial prompt or instruction for the agent. Can be a string or a path to a file.                   |
+| `--interactive` | If set, the agent will ask for confirmation before executing any shell commands.                        |
+| `--agentic`     | If set, the agent will run autonomously until the task is complete or it encounters an error.           |
+| `--permissions` | Sets the permission level for command execution. Can be `weak` (default) or `superuser`.              |
+| `--task-id`     | The specific task ID to resume. If not provided, a new task ID is generated.                            |
 
-**Note:** You cannot use `--interactive` and `--agentic` at the same time.
+### Running the Web UI
 
-## How It Works
+The web UI provides a real-time view of the agent's database.
 
-### API Key Rotation
+1.  **Activate the virtual environment:**
+    ```bash
+    source venv/bin/activate
+    ```
 
-The agent queries the PostgreSQL database to find an available API key that has not exceeded its daily request or token limits. It intelligently throttles requests to avoid hitting the per-minute rate limits, and will automatically sleep and retry if all keys are temporarily exhausted.
+2.  **Run the web server:**
+    ```bash
+    python3 web_ui.py
+    ```
 
-### Task Context Management
-
-Each interaction is tied to a `task_id`. The agent stores the entire conversation history (prompts and responses) as a JSON object in the database. When a new prompt is given with an existing `task_id`, the agent retrieves the history, providing the full context for the new request. This allows for complex, multi-step tasks to be completed over time.
-
-## Project Structure
-
-```
-/
-├── .env                  # Main configuration file
-├── .env.example          # Example configuration
-├── agent_config.json     # Permissions configuration
-├── agent.log             # Agent activity log
-├── db_utils.py           # Database interaction logic
-├── gemini_agent.py       # Core agent script
-├── populate_keys.py      # Script to populate API keys
-├── requirements.txt      # Python dependencies
-├── gemma-exec            # Wrapper script for easy use (aliased to gemma)
-└── venv/                 # Python virtual environment
-```
+3.  **Access in your browser:**
+    Open your web browser and navigate to `http://<your-server-ip>:5002`.

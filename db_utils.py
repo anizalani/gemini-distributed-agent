@@ -6,6 +6,7 @@ import datetime
 import socket
 import os
 import time
+import redis
 from dotenv import load_dotenv
 
 # --- Configuration ---
@@ -16,8 +17,6 @@ load_dotenv(dotenv_path=dotenv_path)
 # Load the PostgreSQL credentials from the path specified in the main .env file
 postgres_env_path = os.getenv("POSTGRES_ENV_FILE")
 if postgres_env_path and os.path.exists(postgres_env_path):
-    # Important: Use override=True to ensure these values are preferred over any
-    # potentially conflicting variables in the main .env file.
     load_dotenv(dotenv_path=postgres_env_path, override=True)
 else:
     logging.error(f"POSTGRES_ENV_FILE is not set or the file does not exist: {postgres_env_path}")
@@ -28,6 +27,22 @@ DB_PASS = os.getenv("POSTGRES_PASSWORD")
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 MIN_REQUEST_INTERVAL_SECONDS = 30
+
+# Redis Configuration
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_KEY_LIST = "available_api_keys"
+
+def get_redis_connection():
+    """Establishes a connection to the Redis server."""
+    try:
+        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+        r.ping()
+        logging.info("Successfully connected to Redis.")
+        return r
+    except redis.exceptions.ConnectionError as e:
+        logging.error(f"Redis connection failed: {e}")
+        return None
 
 def get_db_connection():
     """Establishes a connection to the PostgreSQL database."""
@@ -48,32 +63,115 @@ def get_task_id():
 
 def get_or_create_task(cur, task_id):
     """Fetches a task by ID or creates a new one if it doesn't exist."""
-    cur.execute("SELECT context FROM tasks WHERE id = %s;", (task_id,))
+    cur.execute("SELECT id FROM tasks WHERE id = %s;", (task_id,))
     task = cur.fetchone()
     if task:
         logging.info(f"Resuming existing task: {task_id}")
-        return json.loads(task[0]) if isinstance(task[0], str) else task[0]
     else:
         logging.info(f"Creating new task: {task_id}")
-        context = {'history': []}
         cur.execute(
-            "INSERT INTO tasks (id, context, status) VALUES (%s, %s, %s);",
-            (task_id, json.dumps(context), 'active')
+            "INSERT INTO tasks (id, status) VALUES (%s, %s);",
+            (task_id, 'active')
         )
-        return context
+    return {'history': get_task_history(cur, task_id)}
 
-def get_available_key(cur):
-    """Retrieves an available API key."""
+def get_task_history(cur, task_id):
+    """Retrieves the full conversation history for a task."""
+    history = []
+    cur.execute(
+        "SELECT prompt, response FROM interactions WHERE task_id = %s ORDER BY request_timestamp ASC;",
+        (task_id,)
+    )
+    for row in cur.fetchall():
+        history.append({'prompt': row[0], 'response': row[1]})
+    return history
+
+def add_interaction_to_history(cur, task_id, prompt, response):
+    """Adds a new prompt-response pair to the interactions table."""
+    cur.execute(
+        "INSERT INTO interactions (task_id, prompt, response) VALUES (%s, %s, %s);",
+        (task_id, prompt, response)
+    )
+    cur.execute(
+        "UPDATE tasks SET last_updated = NOW() WHERE id = %s;",
+        (task_id,)
+    )
+    logging.info(f"Added new interaction for task '{task_id}' to database.")
+
+def log_command(cur, task_id, prompt, response, command, permissions, user_confirmation, agent_mode):
+    """Logs a command to the command_log table."""
+    cur.execute("""
+        INSERT INTO command_log (task_id, prompt, response, command, permissions, user_confirmation, agent_mode)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
+    """, (task_id, prompt, response, command, permissions, user_confirmation, agent_mode))
+    return cur.fetchone()[0]
+
+def log_command_output(cur, command_log_id, stdout, stderr, return_code, file_written, success):
+    """Logs the output of a command to the command_output table."""
+    cur.execute("""
+        INSERT INTO command_output (command_log_id, stdout, stderr, return_code, file_written, success)
+        VALUES (%s, %s, %s, %s, %s, %s);
+    """, (command_log_id, stdout, stderr, return_code, file_written, success))
+
+def store_project_file(cur, task_id, path, content):
+    """Stores or updates a project file in the project_files table."""
+    cur.execute("""
+        INSERT INTO project_files (task_id, path, content, last_updated)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (task_id, path) DO UPDATE SET content = EXCLUDED.content, last_updated = NOW();
+    """, (task_id, path, content))
+
+def store_knowledge(cur, task_id, fact_label, fact_value, extracted_from, confidence_score):
+    """Stores a new fact in the knowledge table."""
+    cur.execute("""
+        INSERT INTO knowledge (task_id, fact_label, fact_value, extracted_from, confidence_score)
+        VALUES (%s, %s, %s, %s, %s);
+    """, (task_id, fact_label, fact_value, extracted_from, confidence_score))
+
+def get_available_key(cur, redis_conn):
+    """Retrieves an available API key, using Redis as a cache."""
+    if redis_conn:
+        key_json = redis_conn.lpop(REDIS_KEY_LIST)
+        if key_json:
+            key_info = json.loads(key_json)
+            logging.info(f"Retrieved key '{key_info['name']}' from Redis cache.")
+            # Return in the format (key_name, key_value)
+            return key_info['name'], key_info['value']
+
+    logging.warning("Redis cache miss or connection failed. Querying database for keys.")
     cur.execute("""
         SELECT key_name, key_value
         FROM api_keys
         WHERE (quota_exhausted = FALSE OR quota_exhausted IS NULL)
           AND (disabled_until IS NULL OR disabled_until < NOW())
           AND daily_request_count < 60
-        ORDER BY last_used ASC NULLS FIRST
-        LIMIT 1;
+        ORDER BY last_used ASC NULLS FIRST;
     """)
-    return cur.fetchone()
+    keys = cur.fetchall()
+    
+    if not keys:
+        return None
+
+    # If we queried the DB, let's refresh the cache
+    if redis_conn:
+        # Clear any old list that might exist
+        redis_conn.delete(REDIS_KEY_LIST)
+        # Pipeline commands for efficiency
+        pipe = redis_conn.pipeline()
+        for key_name, key_value in keys:
+            key_info = json.dumps({'name': key_name, 'value': key_value})
+            pipe.rpush(REDIS_KEY_LIST, key_info)
+        pipe.execute()
+        logging.info(f"Refreshed Redis cache with {len(keys)} available keys.")
+        # Pop the first key from the newly populated list
+        key_json = redis_conn.lpop(REDIS_KEY_LIST)
+        if key_json:
+            key_info = json.loads(key_json)
+            return key_info['name'], key_info['value']
+
+    # Fallback for when Redis is down and we have keys from DB
+    return keys[0]
+
 
 def throttle_if_needed(cur, key_name):
     """Sleeps if the key was used too recently to avoid rate limits."""
@@ -81,7 +179,6 @@ def throttle_if_needed(cur, key_name):
     last_used = cur.fetchone()[0]
     
     if last_used:
-        # Ensure last_used is timezone-aware for correct calculation
         if last_used.tzinfo is None:
             last_used = last_used.replace(tzinfo=datetime.timezone.utc)
             
@@ -107,14 +204,8 @@ def update_key_and_log_usage(cur, key_name, task_id, token_count, request_type):
     """, (key_name, task_id, token_count, request_type))
     logging.info(f"Updated usage for key '{key_name}' in database.")
 
-def update_task_context(cur, task_id, new_context):
-    """Updates the context for a given task."""
-    cur.execute("UPDATE tasks SET context = %s, last_updated = NOW() WHERE id = %s;",
-                (json.dumps(new_context), task_id))
-    logging.info(f"Updated context for task '{task_id}'.")
-
 def check_and_notify_quota_usage(cur, key_name, threshold=55):
-    """Checks the daily request count for a key and sends a Slack notification if it's near the limit."""
+    """Checks the daily request count for a key and sends a Slack notification."""
     cur.execute("SELECT daily_request_count FROM api_keys WHERE key_name = %s;", (key_name,))
     count = cur.fetchone()[0]
 
@@ -126,19 +217,25 @@ def check_and_notify_quota_usage(cur, key_name, threshold=55):
         message = f"API key '{key_name}' has reached its daily quota with {count} requests."
         send_slack_notification(message, level="error")
         logging.warning(message)
+        # Since the key is exhausted, we should ensure the cache is cleared.
+        # A simple approach is to just delete the list. It will be repopulated on the next request.
+        redis_conn = get_redis_connection()
+        if redis_conn:
+            redis_conn.delete(REDIS_KEY_LIST)
+            logging.info("Cleared Redis key cache because a key reached its quota.")
 
 def send_slack_notification(message, channel=None, pretext=None, level="info"):
-    """Sends a notification to a Slack webhook, with more flexibility."""
+    """Sends a notification to a Slack webhook."""
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url or webhook_url == "https://hooks.slack.com/services/YOUR/WEBHOOK/URL":
         logging.warning("Slack webhook URL not configured. Skipping notification.")
         return
 
     color = {
-        "info": "#36a64f",    # Green
-        "warning": "#ffae42", # Orange
-        "error": "#d50200"    # Red
-    }.get(level, "#cccccc") # Default grey
+        "info": "#36a64f",
+        "warning": "#ffae42",
+        "error": "#d50200"
+    }.get(level, "#cccccc")
 
     payload = {
         "attachments": [
