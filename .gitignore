@@ -16,3 +16,9 @@ Thumbs.db
 
 # SSH Keys
 ssh_keys/
+
+# Super-secret enhancement documentation
+gemini_database_expansion.md
+test.md
+gemini_advanced_agent_schema.md
+gemini_cli_wrapped_launcher.md
