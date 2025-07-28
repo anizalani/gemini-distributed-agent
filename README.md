@@ -49,28 +49,33 @@ The Gemini Distributed Agent is a powerful, database-backed system for running G
 
 ## Usage
 
-### Running the Agent
+The primary entry point for the Gemini Distributed Agent is the `launch_gemini_task.sh` script. This script wraps the standard `gemini` CLI, integrating it with the project's database backend for persistent logging, context management, and API key rotation.
 
-The agent is run using the `gemma` command, which is an alias for the `gemini_agent.py` script.
+### Running a Task
+
+To start a new task, run the launcher script with a unique `task_id`.
 
 ```bash
-gemma [PROMPT] [OPTIONS]
+./launcher/launch_gemini_task.sh <task_id> [mode]
 ```
+
+**Arguments:**
+
+| Argument  | Description                                                                                             |
+|-----------|---------------------------------------------------------------------------------------------------------|
+| `task_id` | A unique identifier for the task (e.g., `refactor-api-20250728`). This is used to group all related logs. |
+| `mode`    | (Optional) The operational mode. Defaults to `interactive`.                                             |
 
 **Example:**
+
 ```bash
-gemma "Refactor the web_ui.py script to use websockets." --agentic --permissions superuser
+# Start a new interactive session for a refactoring task
+./launcher/launch_gemini_task.sh refactor-web-ui-websockets
+
+# The script will initialize the environment and then launch the `gemini` CLI.
+# You can now interact with the Gemini model as usual.
+# All interactions and commands will be logged to the database under the specified task_id.
 ```
-
-**Arguments & Options:**
-
-| Argument      | Description                                                                                             |
-|---------------|---------------------------------------------------------------------------------------------------------|
-| `prompt`      | The initial prompt or instruction for the agent. Can be a string or a path to a file.                   |
-| `--interactive` | If set, the agent will ask for confirmation before executing any shell commands.                        |
-| `--agentic`     | If set, the agent will run autonomously until the task is complete or it encounters an error.           |
-| `--permissions` | Sets the permission level for command execution. Can be `weak` (default) or `superuser`.              |
-| `--task-id`     | The specific task ID to resume. If not provided, a new task ID is generated.                            |
 
 ### Running the Web UI
 
