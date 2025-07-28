@@ -21,3 +21,4 @@ ssh_keys/
 gemini_database_expansion.md
 test.md
 gemini_advanced_agent_schema.md
+gemini_cli_wrapped_launcher.md
