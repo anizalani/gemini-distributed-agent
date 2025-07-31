@@ -28,6 +28,18 @@ PROJECT_ROOT = os.getenv("GEMINI_AGENT_ROOT", os.path.dirname(__file__))
 LOG_FILE = os.path.join(os.path.dirname(__file__), "agent.log")
 KEY_EXHAUSTED_SLEEP_MINUTES = 5
 
+# --- Global Permissions ---
+# Load permissions from config at a global scope so all functions can access them.
+try:
+    with open('agent_config.json', 'r') as f:
+        config = json.load(f)
+    WEAK_ALLOWED_COMMANDS = config.get('permissions', {}).get('weak', {}).get('allowlist', [])
+    SUPERUSER_DENIED_COMMANDS = config.get('permissions', {}).get('superuser', {}).get('denylist', [])
+except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+    logging.error(f"Failed to load permissions from agent_config.json: {e}. Defaulting to empty lists.")
+    WEAK_ALLOWED_COMMANDS = []
+    SUPERUSER_DENIED_COMMANDS = []
+
 # --- Logging Setup ---
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +98,7 @@ def run_gemini_command(api_key, prompt, context_history, base_context=None):
         full_prompt += f"Previous Prompt: {interaction['prompt']}\n"
         full_prompt += f"Previous Response: {interaction['response']}\n\n"
     full_prompt += f"Current Prompt: {prompt}"
+    full_prompt += "\n\nImportant: Your response must contain only a single, valid shell command enclosed in a ```bash code block. Do not include any other text, explanations, or formatting."
 
     spinner = Spinner("Communicating with Gemini...")
     spinner.start()
@@ -137,13 +150,13 @@ def execute_shell_command(command, permissions_level, is_interactive, task_id, c
     # --- Permission Check ---
     can_execute = False
     if permissions_level == 'superuser':
-        if command_base in DENIED_COMMANDS:
+        if command_base in SUPERUSER_DENIED_COMMANDS:
             error_message = f"Execution denied: Command '{command_base}' is on the superuser denylist."
             logging.error(error_message)
             return error_message, False
         can_execute = True
     else: # 'weak' mode is the default
-        if command_base in ALLOWED_COMMANDS:
+        if command_base in WEAK_ALLOWED_COMMANDS:
             can_execute = True
         elif is_interactive:
             logging.warning(f"Command '{command_base}' is not on the weak allowlist.")
@@ -231,21 +244,6 @@ def main():
     if args.interactive and args.agentic:
         print("Error: Cannot use --interactive and --agentic flags simultaneously.")
         return
-
-    # Load permissions from config
-    try:
-        with open('agent_config.json', 'r') as f:
-            config = json.load(f)
-        if args.permissions == 'weak':
-            ALLOWED_COMMANDS = config['permissions']['weak']['allowlist']
-            DENIED_COMMANDS = []
-        elif args.permissions == 'superuser':
-            DENIED_COMMANDS = config['permissions']['superuser']['denylist']
-            ALLOWED_COMMANDS = [] # Not used in superuser mode
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        logging.error(f"Failed to load permissions from agent_config.json: {e}. Defaulting to empty lists.")
-        ALLOWED_COMMANDS = []
-        DENIED_COMMANDS = []
 
     current_prompt = args.prompt
     # Check if the prompt is a file path and read its content

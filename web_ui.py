@@ -5,7 +5,7 @@ import json
 import pytz
 from datetime import datetime
 from dotenv import load_dotenv
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, send_from_directory
 
 # --- Configuration ---
 # Load database credentials from the .postgres.env file
@@ -21,6 +21,7 @@ TARGET_TZ = pytz.timezone('America/Chicago')
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
+LOGS_DIR = os.path.join(app.root_path, 'gemma_logs')
 
 # --- HTML Template ---
 HTML_TEMPLATE = """
@@ -53,6 +54,7 @@ HTML_TEMPLATE = """
         <a href="/keys">API Keys</a>
         <a href="/interactions">Interactions</a>
         <a href="/command_log">Command Log</a>
+        <a href="/gemma_logs">Gemma Logs</a>
     </nav>
     <div class="container">
         <h1>{{ title }}</h1>
@@ -228,6 +230,50 @@ def view_command_log():
         finally:
             conn.close()
     return render_template_string(HTML_TEMPLATE, data=data, headers=headers, error=error_message, title="Command Log")
+
+@app.route('/gemma_logs', defaults={'filename': None})
+@app.route('/gemma_logs/<path:filename>')
+def view_gemma_logs(filename):
+    """Serves a specific log file or lists all available logs."""
+    if filename:
+        return send_from_directory(LOGS_DIR, filename)
+    else:
+        # List all log files
+        try:
+            files = [f for f in os.listdir(LOGS_DIR) if os.path.isfile(os.path.join(LOGS_DIR, f))]
+            files.sort(reverse=True)
+            
+            # Simple HTML for listing files
+            file_list_html = "<ul>"
+            for f in files:
+                file_list_html += f'<li><a href="/gemma_logs/{f}">{f}</a></li>'
+            file_list_html += "</ul>"
+
+            # Using a simplified template for the file list
+            list_template = """
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Gemini Agent - Gemma Logs</title>
+                <style>
+                    body { font-family: sans-serif; margin: 2em; }
+                    ul { list-style-type: none; padding: 0; }
+                    li { margin: 0.5em 0; }
+                    a { text-decoration: none; color: #007bff; }
+                    a:hover { text-decoration: underline; }
+                </style>
+            </head>
+            <body>
+                <h1>Available Gemma Logs</h1>
+                {{ file_list_html|safe }}
+            </body>
+            </html>
+            """
+            return render_template_string(list_template, file_list_html=file_list_html)
+
+        except FileNotFoundError:
+            return "Log directory not found.", 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)
