@@ -38,9 +38,8 @@ if [[ "$1" == "--file" ]]; then
 else
   # Direct prompt input
   if [ -z "$1" ]; then
-    echo "Usage: gemma <your prompt here>"
-    echo "   or: gemma --file <path_to_instruction_file>"
-    exit 1
+"    "$PYTHON_EXEC" "$AGENT_SCRIPT" --agentic --permissions superuser"
+    exit 0
   fi
   USER_INSTRUCTIONS="$*"
 fi
