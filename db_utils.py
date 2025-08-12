@@ -61,7 +61,8 @@ def get_task_id():
     """Generates a unique task ID from the hostname and current date."""
     hostname = socket.gethostname()
     today = datetime.date.today().strftime('%Y-%m-%d')
-    return f"{hostname}-{today}"
+    import uuid
+    return f"{hostname}-{today}-{{str(uuid.uuid4())[:8]}}" 
 
 def get_or_create_task(cur, task_id):
     """Fetches a task by ID or creates a new one if it doesn't exist."""
