@@ -2,7 +2,7 @@ import os
 import json
 import argparse
 import logging
-import db_utils
+from utils import db_utils
 
 # --- Configuration ---
 # Files with these extensions will be read.

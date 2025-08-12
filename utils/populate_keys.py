@@ -1,5 +1,5 @@
 import os
-import db_utils
+from utils import db_utils
 import logging
 from dotenv import load_dotenv
 
