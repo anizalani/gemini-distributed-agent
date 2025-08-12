@@ -42,10 +42,9 @@ fi
 
 # 1. Select the next available API key from the database
 echo "LAUNCHER: Selecting API key..."
-# GEMINI_API_KEY=$(python3 "$SCRIPT_DIR/scripts/select_key.py" --task_id "$TASK_ID")
-# export GEMINI_API_KEY
-# echo "LAUNCHER: Using key ending in ${GEMINI_API_KEY: -4}"
-echo "LAUNCHER: (Skipped - select_key.py not implemented)" # Placeholder
+GEMINI_API_KEY=$($PROJECT_ROOT/.venv/bin/python "$SCRIPT_DIR/scripts/select_key.py")
+export GEMINI_API_KEY
+echo "LAUNCHER: Using key ending in ${GEMINI_API_KEY: -4}"
 
 # 2. Populate context from previous sessions or related tasks
 echo "LAUNCHER: Populating context..."
