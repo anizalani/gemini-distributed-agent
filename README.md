@@ -93,3 +93,4 @@ The web UI provides a real-time view of the agent's database.
 
 3.  **Access in your browser:**
     Open your web browser and navigate to `http://<your-server-ip>:5002`.
+test

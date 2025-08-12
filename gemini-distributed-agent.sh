@@ -20,4 +20,4 @@ fi
 # The specific command to start the agent might need to be adjusted
 # based on the project's entry point.
 echo "Starting the Gemini Distributed Agent..."
-python -m gemini_agent.main
+python3 "$PROJECT_DIR/gemini_agent.py" "$@"
