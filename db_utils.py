@@ -1,4 +1,5 @@
 
+
 import psycopg2
 import logging
 import json
@@ -19,10 +20,11 @@ postgres_env_path = os.getenv("POSTGRES_ENV_FILE")
 if postgres_env_path and os.path.exists(postgres_env_path):
     load_dotenv(dotenv_path=postgres_env_path, override=True)
 else:
-    logging.error(f"POSTGRES_ENV_FILE is not set or the file does not exist: {postgres_env_path}")
+    logging.warning(f"POSTGRES_ENV_FILE is not set or the file does not exist: {postgres_env_path}")
 
-DB_NAME = os.getenv("POSTGRES_DB", "gemini_distributed_agent")
-DB_USER = os.getenv("POSTGRES_USER")
+# Use the correct database name discovered from the docker container
+DB_NAME = os.getenv("POSTGRES_DB", "speedtesttracker") 
+DB_USER = os.getenv("POSTGRES_USER", "rootuser")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
@@ -98,20 +100,28 @@ def add_interaction_to_history(cur, task_id, prompt, response):
     )
     logging.info(f"Added new interaction for task '{task_id}' to database.")
 
-def log_command(cur, task_id, prompt, response, command, permissions, user_confirmation, agent_mode):
-    """Logs a command to the command_log table."""
+def log_command(cur, task_id, prompt, command, thought, parent_command_id=None, permissions="superuser", user_confirmation=False, agent_mode="ReAct"):
+    """Logs a command and its preceding thought to the command_log table."""
     cur.execute("""
-        INSERT INTO command_log (task_id, prompt, response, command, permissions, user_confirmation, agent_mode)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
-    """, (task_id, prompt, response, command, permissions, user_confirmation, agent_mode))
+        INSERT INTO command_log (task_id, prompt, command, thought, parent_command_id, permissions, user_confirmation, agent_mode, status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_confirmation') RETURNING id;
+    """, (task_id, prompt, command, thought, parent_command_id, permissions, user_confirmation, agent_mode))
     return cur.fetchone()[0]
 
 def log_command_output(cur, command_log_id, stdout, stderr, return_code, file_written, success):
-    """Logs the output of a command to the command_output table."""
+    """Logs the output of a command and updates the observation field."""
+    # First, log to the dedicated output table
     cur.execute("""
         INSERT INTO command_output (command_log_id, stdout, stderr, return_code, file_written, success)
         VALUES (%s, %s, %s, %s, %s, %s);
     """, (command_log_id, stdout, stderr, return_code, file_written, success))
+    
+    # Second, update the observation field in the main command_log table
+    observation = f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+    cur.execute("""
+        UPDATE command_log SET observation = %s WHERE id = %s;
+    """, (observation, command_log_id))
+
 
 def store_project_file(cur, task_id, path, content):
     """Stores or updates a project file in the project_files table."""
@@ -135,7 +145,6 @@ def get_available_key(cur, redis_conn):
         if key_json:
             key_info = json.loads(key_json)
             logging.info(f"Retrieved key '{key_info['name']}' from Redis cache.")
-            # Return in the format (key_name, key_value)
             return key_info['name'], key_info['value']
 
     logging.warning("Redis cache miss or connection failed. Querying database for keys.")
@@ -152,24 +161,19 @@ def get_available_key(cur, redis_conn):
     if not keys:
         return None
 
-    # If we queried the DB, let's refresh the cache
     if redis_conn:
-        # Clear any old list that might exist
         redis_conn.delete(REDIS_KEY_LIST)
-        # Pipeline commands for efficiency
         pipe = redis_conn.pipeline()
         for key_name, key_value in keys:
             key_info = json.dumps({'name': key_name, 'value': key_value})
             pipe.rpush(REDIS_KEY_LIST, key_info)
         pipe.execute()
         logging.info(f"Refreshed Redis cache with {len(keys)} available keys.")
-        # Pop the first key from the newly populated list
         key_json = redis_conn.lpop(REDIS_KEY_LIST)
         if key_json:
             key_info = json.loads(key_json)
             return key_info['name'], key_info['value']
 
-    # Fallback for when Redis is down and we have keys from DB
     return keys[0]
 
 
@@ -217,8 +221,6 @@ def check_and_notify_quota_usage(cur, key_name, threshold=55):
         message = f"API key '{key_name}' has reached its daily quota with {count} requests."
         send_slack_notification(message, level="error")
         logging.warning(message)
-        # Since the key is exhausted, we should ensure the cache is cleared.
-        # A simple approach is to just delete the list. It will be repopulated on the next request.
         redis_conn = get_redis_connection()
         if redis_conn:
             redis_conn.delete(REDIS_KEY_LIST)
@@ -258,3 +260,24 @@ def send_slack_notification(message, channel=None, pretext=None, level="info"):
             logging.warning(f"Failed to send Slack notification. Status: {response.status_code}, Response: {response.text}")
     except Exception as e:
         logging.error(f"Exception while sending Slack notification: {e}", exc_info=True)
+
+
+def log_cli_command(cur, task_id, prompt, command, approved, agentic, permissions="superuser"):
+    """
+    Minimal, schema-accurate insert for CLI runs.
+    - approved: bool -> user_confirmation
+    - agentic: bool -> agent_mode "Agentic"/"Interactive"
+    - permissions: text (e.g., "superuser")
+    Returns new command_log id.
+    """
+    agent_mode = "Agentic" if agentic else "Interactive"
+    cur.execute("""
+        INSERT INTO command_log
+            (task_id, prompt, command, permissions, user_confirmation, agent_mode, status)
+        VALUES
+            (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id;
+    """, (task_id, prompt, command, permissions, approved, agent_mode, 'queued'))
+    new_id = cur.fetchone()[0]
+    cur.connection.commit()
+    return new_id
