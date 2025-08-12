@@ -4,9 +4,9 @@ import os, sys, subprocess, argparse, logging, datetime, hashlib, readline, shut
 AGENT_DIR = os.path.dirname(__file__)
 sys.path.append(AGENT_DIR)
 try:
-    import db_utils
+    from utils import db_utils
 except ImportError as e:
-    sys.exit(f"Fatal Error: Could not import db_utils.py. Details: {e}")
+    sys.exit(f"Fatal Error: Could not from utils import db_utils.py. Details: {e}")
 
 COMMAND_TIMEOUT = 300
 DEFAULT_NVM_GEMINI = "/home/ubuntu/.nvm/versions/node/v20.19.4/bin/gemini"

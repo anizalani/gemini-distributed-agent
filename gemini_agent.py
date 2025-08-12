@@ -14,7 +14,7 @@ if os.path.exists(dotenv_path) and os.access(dotenv_path, os.R_OK):
 else:
     print(f"Warning: .env file not found at {dotenv_path} or is not readable. Proceeding with environment variables or defaults.")
 
-import db_utils
+from utils import db_utils
 import time
 import logging
 import subprocess

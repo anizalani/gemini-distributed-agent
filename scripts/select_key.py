@@ -1,1 +1,1 @@
-import sys; sys.path.append(\/opt/gemini-distributed-agent\); from db_utils import get_available_key, get_db_connection, get_redis_connection; conn = get_db_connection(); redis_conn = get_redis_connection(); key_info = get_available_key(conn.cursor(), redis_conn); print(key_info[1])
+import sys; sys.path.append(\/opt/gemini-distributed-agent\); from utils.db_utils import get_available_key, get_db_connection, get_redis_connection; conn = get_db_connection(); redis_conn = get_redis_connection(); key_info = get_available_key(conn.cursor(), redis_conn); print(key_info[1])

@@ -56,7 +56,7 @@ GEMINI_API_KEY=$(python3 /srv/countrycat/common-scripts/select_key.py --task_id 
 export GEMINI_API_KEY
 
 # Load context
-python3 /srv/countrycat/common-scripts/populate_context.py --task_id "$TASK_ID"
+python3 /opt/gemini-distributed-agent/utils/populate_context.py --task_id "$TASK_ID"
 
 # Launch Gemini CLI shell
 /usr/local/bin/gemini
