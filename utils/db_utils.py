@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 # --- Configuration ---
 # Load the main .env file to get the root paths
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 # Load the PostgreSQL credentials from the path specified in the main .env file

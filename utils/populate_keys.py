@@ -13,7 +13,7 @@ def populate_keys_from_env():
     """
     # Load environment variables from the project's .env file
     # This ensures that API_KEYS_FILE and POSTGRES_ENV_FILE are available
-    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
     load_dotenv(dotenv_path=dotenv_path)
     
     keys_file = os.getenv("API_KEYS_FILE")
