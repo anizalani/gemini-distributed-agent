@@ -1,24 +1,43 @@
-# Python Virtual Environment
-# This directory contains the project's dependencies and is not version controlled.
-venv/
-*.pyc
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.dist/
+build/
+.eggs/
 
-# Logs
+# Virtual env / node cache
+venv/
+.env/
+.envrc
+.node_modules/
+npm-debug.log*
+
+# Logs & runtime
+logs/
 *.log
-
-# Environment variables
-.env
-
-# OS-specific files
+*.pid
+*.sqlite*
+*.db
+*.db-*
+gemma_logs/
+*.tmp
 .DS_Store
-Thumbs.db
 
-# SSH Keys
-ssh_keys/
+# Local config & secrets
+.postgres.env
+.env
+*.key
+*.pem
+*.crt
 
-# Super-secret enhancement documentation
-gemini_database_expansion.md
-test.md
-gemini_advanced_agent_schema.md
-gemini_cli_wrapped_launcher.md
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.swp
+*.swo
