@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/gemini-distributed-agent
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+cd "$DIR"
 echo "[deploy] pulling…"
 git fetch origin
 git switch main
@@ -10,5 +11,5 @@ sudo systemctl restart gemma-web
 sleep 1
 sudo systemctl --no-pager --full status gemma-web | sed -n '1,20p'
 echo "[deploy] health:"
-curl -sS http://127.0.0.1:5002/health || true
+curl -sS "${WEB_UI_HEALTH:-http://127.0.0.1:5002/health}" || true
 echo

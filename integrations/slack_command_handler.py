@@ -11,14 +11,21 @@ import requests
 import logging
 
 # --- Configuration ---
-# Load environment variables to get the Slack secret and script path
 from dotenv import load_dotenv
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=dotenv_path)
 
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+load_dotenv(dotenv_path=os.path.join(ROOT, ".env"), override=True)
+
+# Slack secrets from env
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-GEMINI_SCRIPT_PATH = os.getenv("GEMINI_SCRIPT_PATH", "/home/ubuntu/gemini-distributed-agent/run_gemini_contextual.py")
-LOG_FILE = os.getenv("SLACK_HANDLER_LOG_FILE", "/home/ubuntu/gemini-distributed-agent/slack_handler.log")
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+
+# Where to run the contextual script (default to repo root)
+GEMINI_SCRIPT_PATH = os.getenv("GEMINI_SCRIPT_PATH", os.path.join(ROOT, "run_gemini_contextual.py"))
+
+# Log file under repo logs/
+LOG_FILE = os.getenv("SLACK_HANDLER_LOG_FILE", os.path.join(ROOT, "logs", "slack_handler.log"))
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
 # --- Logging Setup ---
 logging.basicConfig(

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-DIR="/opt/gemini-distributed-agent"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 PORT="${2:-${WEB_UI_PORT:-5002}}"
 PID="$DIR/logs/web_ui.${PORT}.pid"
 LOG="$DIR/logs/web_ui.${PORT}.log"
@@ -26,13 +26,11 @@ case "${1:-}" in
       echo "Stopped port $PORT"
     else
       echo "No pidfile for port $PORT; trying fuser..."
-      sudo fuser -k ${PORT}/tcp || true
+      sudo fuser -k "${PORT}/tcp" || true
     fi
     ;;
   restart)
-    "$0" stop "$PORT" || true
-    sleep 1
-    "$0" start "$PORT"
+    "$0" stop "$PORT" || true; sleep 1; "$0" start "$PORT"
     ;;
   status)
     if [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; then

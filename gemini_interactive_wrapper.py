@@ -9,7 +9,8 @@ except ImportError as e:
     sys.exit(f"Fatal Error: Could not from utils import db_utils.py. Details: {e}")
 
 COMMAND_TIMEOUT = 300
-DEFAULT_NVM_GEMINI = "/home/ubuntu/.nvm/versions/node/v20.19.4/bin/gemini"
+# Prefer env, PATH, then best match under ~/.nvm
+NVM_DIR = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
 HISTFILE = os.path.expanduser("~/.gemini_history")
 LOG_FILE = os.path.join(AGENT_DIR, "interactive_wrapper.log")
 USER_ID = int(os.environ.get("GEMMA_USER_ID", "1"))  # kept for future use
@@ -26,14 +27,28 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s",
                     handlers=[logging.FileHandler(LOG_FILE)])
 
 def find_gemini_exec() -> str:
+    # 1) explicit env
     env_exec = os.environ.get("GEMINI_EXEC")
     if env_exec and os.path.isfile(env_exec) and os.access(env_exec, os.X_OK):
         return env_exec
-    if os.path.isfile(DEFAULT_NVM_GEMINI) and os.access(DEFAULT_NVM_GEMINI, os.X_OK):
-        return DEFAULT_NVM_GEMINI
+
+    # 2) PATH
     which = shutil.which("gemini")
-    if which: return which
-    sys.exit("Fatal Error: Could not find `gemini` CLI. Install it or set GEMINI_EXEC.")
+    if which:
+        return which
+
+    # 3) look for latest under NVM
+    versions_dir = os.path.join(NVM_DIR, "versions", "node")
+    if os.path.isdir(versions_dir):
+        candidates = []
+        for v in sorted(os.listdir(versions_dir), reverse=True):
+            p = os.path.join(versions_dir, v, "bin", "gemini")
+            if os.path.isfile(p) and os.access(p, os.X_OK):
+                candidates.append(p)
+        if candidates:
+            return candidates[0]
+
+    sys.exit("Fatal Error: Could not find `gemini` CLI. Install it, or set GEMINI_EXEC, or install via NVM.")
 
 def generate_task_id(prompt: str) -> str:
     hostname = os.uname().nodename
