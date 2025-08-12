@@ -1,23 +1,19 @@
 import os
 from dotenv import load_dotenv
-load_dotenv(dotenv_path='/opt/gemini-distributed-agent/.env', override=True)
 
-import os
-from dotenv import load_dotenv
-load_dotenv(dotenv_path='/opt/gemini-distributed-agent/.env', override=True)
+# Resolve repo root from this file (…/integrations/ -> repo root)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+load_dotenv(dotenv_path=os.path.join(ROOT, ".env"), override=True)
 
-
-import os
 import subprocess
 import threading
 from datetime import datetime
-from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 # --- Configuration ---
 # Load environment variables from a .env file
-load_dotenv(dotenv_path='/opt/gemini-distributed-agent/.env', override=True)
+load_dotenv(dotenv_path=os.path.join(ROOT, '.env'), override=True)
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN")
 LOGS_DIR = os.path.join(os.path.dirname(__file__), 'gemma_logs')

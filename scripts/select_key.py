@@ -1,1 +1,9 @@
-import sys; sys.path.append(\/opt/gemini-distributed-agent\); from utils.db_utils import get_available_key, get_db_connection, get_redis_connection; conn = get_db_connection(); redis_conn = get_redis_connection(); key_info = get_available_key(conn.cursor(), redis_conn); print(key_info[1])
+#!/usr/bin/env python3
+import os, sys, subprocess
+HERE = os.path.dirname(__file__)
+ROOT = os.path.abspath(os.path.join(HERE, ".."))
+TARGET = os.path.join(ROOT, "launcher", "scripts", "select_key.py")
+if not os.path.exists(TARGET):
+    sys.stderr.write(f"select_key.py not found at {TARGET}\n")
+    sys.exit(1)
+os.execv(sys.executable, [sys.executable, TARGET] + sys.argv[1:])
