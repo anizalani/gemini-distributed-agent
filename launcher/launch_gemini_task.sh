@@ -1,79 +1,171 @@
 #!/bin/bash
 #
 # Gemini CLI Wrapped Launcher
+# - Loads env from config/.env
+# - Selects API key via select_key.py and shows masked details
+# - Ensures @google/gemini-cli is installed and up to date
+# - Starts the gemini CLI
 #
-# This script acts as a wrapper for the Gemini CLI, integrating it with
-# the distributed agent database backend for context, logging, and API key management.
-#
 
-set -e
+set -euo pipefail
 
-# --- Configuration ---
+# --- Helpers ---
 
-# Dynamically determine the absolute path of the script's directory
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &> /dev/null && pwd) # Assumes this script is in a subdir of the project root
+mask_key() {
+  local k="${1:-}"; local n=${#k}
+  if (( n < 8 )); then
+    printf '[key too short]'
+  else
+    printf '%s…%s (len=%d)' "${k:0:4}" "${k: -4}" "$n"
+  fi
+}
 
-# --- Argument Parsing ---
+log() { echo "LAUNCHER: $*"; }
 
-if [ -z "$1" ]; then
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+installed_gemini_version() {
+  # Prefer the binary's --version if available
+  if have_cmd gemini; then
+    gemini --version 2>/dev/null | head -n1 | sed -E 's/[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/' || true
+    return
+  fi
+  # Fallback: parse npm list (global)
+  if have_cmd npm; then
+    npm list -g @google/gemini-cli --depth=0 2>/dev/null \
+      | sed -nE 's/.*@google\/gemini-cli@([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' || true
+    return
+  fi
+  echo ""
+}
+
+latest_gemini_version() {
+  # Query npm registry for latest
+  if have_cmd npm; then
+    npm view @google/gemini-cli version 2>/dev/null || true
+  else
+    echo ""
+  fi
+}
+
+ensure_gemini_cli_latest() {
+  if ! have_cmd npm; then
+    log "ERROR - npm is not installed. Please install Node.js & npm (needed for @google/gemini-cli)."
+    exit 1
+  fi
+
+  local installed latest newest
+  installed="$(installed_gemini_version)"
+  latest="$(latest_gemini_version)"
+
+  if [[ -z "$installed" && -z "$latest" ]]; then
+    # No npm and/or network issue fetching latest
+    log "'gemini' not found and could not determine latest version. Attempting install of @google/gemini-cli@latest…"
+    npm install -g @google/gemini-cli
+    return
+  fi
+
+  if [[ -z "$installed" ]]; then
+    log "'gemini' CLI not found. Installing @google/gemini-cli@latest (${latest:-unknown})…"
+    npm install -g @google/gemini-cli@latest
+    return
+  fi
+
+  if [[ -z "$latest" ]]; then
+    log "Installed gemini-cli v$installed; unable to check latest (network/registry). Continuing."
+    return
+  fi
+
+  # Compare semver using sort -V
+  newest="$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)"
+  if [[ "$newest" != "$installed" ]]; then
+    log "Update available: gemini-cli $installed -> $latest. Installing latest…"
+    npm install -g @google/gemini-cli@latest
+  else
+    log "gemini-cli is up to date (v$installed)."
+  fi
+}
+
+# --- Paths ---
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)   # launcher/.. -> project root
+
+# --- Args ---
+
+if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <task_id> [mode]"
   echo "Example: $0 task-20250728-alpha interactive"
   exit 1
 fi
 
 TASK_ID="$1"
-MODE="${2:-interactive}" # Default to 'interactive' if not provided
+MODE="${2:-interactive}"
 
 echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode ---"
 
-# --- Environment Setup ---
+# --- Load env ---
 
-# Load environment variables from the central config
 CONFIG_PATH="$SCRIPT_DIR/config/.env"
-if [ -f "$CONFIG_PATH" ]; then
-  echo "LAUCHER: Loading environment from $CONFIG_PATH"
-  source "$CONFIG_PATH"
+if [[ -f "$CONFIG_PATH" ]]; then
+  log "Loading environment from $CONFIG_PATH"
+  set -a
+  # shellcheck disable=SC1090
+  . "$CONFIG_PATH"
+  set +a
 else
-  echo "LAUNCHER: Warning - Configuration file not found at $CONFIG_PATH"
+  log "Warning - Configuration file not found at $CONFIG_PATH"
 fi
 
-# --- Backend Integration ---
+# Ensure libpq sees credentials even if DSN omits them
+export PGHOST="${PGHOST:-localhost}"
+export PGPORT="${PGPORT:-5432}"
+export PGDATABASE="${PGDATABASE:-gemini_agents}"
+export PGUSER="${PGUSER:-gemini_user}"
+export PGPASSWORD="${PGPASSWORD:-}"
+export DATABASE_URL="${DATABASE_URL:-}"
 
-# 1. Select the next available API key from the database
-echo "LAUNCHER: Selecting API key..."
-GEMINI_API_KEY=$($PROJECT_ROOT/.venv/bin/python "$SCRIPT_DIR/scripts/select_key.py")
+# --- Select API key ---
+
+log "Selecting API key…"
+
+# Prefer /srv/gemini/venv, then .venv, then system python
+PY_BIN="$PROJECT_ROOT/venv/bin/python"
+[[ -x "$PY_BIN" ]] || PY_BIN="$PROJECT_ROOT/.venv/bin/python"
+[[ -x "$PY_BIN" ]] || PY_BIN="python3"
+
+GEMINI_API_KEY="$("$PY_BIN" "$SCRIPT_DIR/scripts/select_key.py")"
 export GEMINI_API_KEY
-echo "LAUNCHER: Using key ending in ${GEMINI_API_KEY: -4}"
+log "Using key $(mask_key "$GEMINI_API_KEY") via $(basename "$PY_BIN")"
 
-# 2. Populate context from previous sessions or related tasks
-echo "LAUNCHER: Populating context..."
-# python3 "$SCRIPT_DIR/scripts/populate_context.py" --task_id "$TASK_ID"
-echo "LAUNCHER: (Skipped - populate_context.py not implemented)" # Placeholder
+# --- (Optional) Context populate hook ---
 
-# --- Gemini CLI Execution ---
+log "Populating context…"
+# "$PY_BIN" "$SCRIPT_DIR/scripts/populate_context.py" --task_id "$TASK_ID"
+log "(Skipped - populate_context.py not implemented)"
 
-# Check if the gemini command exists
-if ! command -v gemini &> /dev/null; then
-    echo "LAUNCHER: ERROR - The 'gemini' command was not found."
-    echo "Please ensure the @google/gemini-cli is installed globally (e.g., 'npm install -g @google/gemini-cli')."
-    exit 1
+# --- Ensure gemini CLI exists & is latest ---
+
+if ! have_cmd gemini; then
+  log "'gemini' CLI not found on PATH."
+  ensure_gemini_cli_latest
+else
+  # Even if present, check for update and install if newer exists
+  ensure_gemini_cli_latest
 fi
 
-echo "LAUNCHER: Starting Gemini CLI. Use Ctrl+D or type 'exit' to end session."
-echo "---------------------------------------------------------------------"
+# --- Run CLI ---
 
-# Launch the interactive Gemini CLI shell
-# When the user exits the shell, the script will continue.
+log "Starting Gemini CLI. Use Ctrl+D or type 'exit' to end session."
+echo "---------------------------------------------------------------------"
 gemini
-
 echo "---------------------------------------------------------------------"
-echo "LAUNCHER: Gemini CLI session ended."
+log "Gemini CLI session ended."
 
-# --- Post-Session Logging ---
+# --- Post-session hook ---
 
-echo "LAUNCHER: Logging session details to database..."
-# python3 "$SCRIPT_DIR/scripts/log_session.py" --task_id "$TASK_ID"
-echo "LAUNCHER: (Skipped - log_session.py not implemented)" # Placeholder
+log "Logging session details to database…"
+# "$PY_BIN" "$SCRIPT_DIR/scripts/log_session.py" --task_id "$TASK_ID"
+log "(Skipped - log_session.py not implemented)"
 
 echo "--- LAUNCHER: Task [$TASK_ID] finished ---"
