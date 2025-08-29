@@ -22,35 +22,27 @@ mask_key() {
 
 log() { echo "LAUNCHER: $*"; }
 
-have_cmd() { command -v "$1" >/dev/null 2>&1; }
+# --- Paths ---
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)   # launcher/.. -> project root
+GEMINI_CLI="$PROJECT_ROOT/node_modules/.bin/gemini"
+
+have_cmd() { [[ -x "$GEMINI_CLI" ]]; }
 
 installed_gemini_version() {
-  # Prefer the binary's --version if available
-  if have_cmd gemini; then
-    gemini --version 2>/dev/null | head -n1 | sed -E 's/[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/' || true
-    return
+  if have_cmd; then
+    "$GEMINI_CLI" --version 2>/dev/null | head -n1 | sed -E 's/[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/' || true
   fi
-  # Fallback: parse npm list (global)
-  if have_cmd npm; then
-    npm list -g @google/gemini-cli --depth=0 2>/dev/null \
-      | sed -nE 's/.*@google\/gemini-cli@([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' || true
-    return
-  fi
-  echo ""
 }
 
 latest_gemini_version() {
-  # Query npm registry for latest
-  if have_cmd npm; then
-    npm view @google/gemini-cli version 2>/dev/null || true
-  else
-    echo ""
-  fi
+  npm view @google/gemini-cli version 2>/dev/null || true
 }
 
 ensure_gemini_cli_latest() {
-  if ! have_cmd npm; then
-    log "ERROR - npm is not installed. Please install Node.js & npm (needed for @google/gemini-cli)."
+  if ! command -v npm >/dev/null 2>&1; then
+    log "ERROR - npm is not installed. Please install Node.js & npm."
     exit 1
   fi
 
@@ -58,38 +50,25 @@ ensure_gemini_cli_latest() {
   installed="$(installed_gemini_version)"
   latest="$(latest_gemini_version)"
 
-  if [[ -z "$installed" && -z "$latest" ]]; then
-    # No npm and/or network issue fetching latest
-    log "'gemini' not found and could not determine latest version. Attempting install of @google/gemini-cli@latest…"
-    npm install -g @google/gemini-cli
-    return
-  fi
-
   if [[ -z "$installed" ]]; then
-    log "'gemini' CLI not found. Installing @google/gemini-cli@latest (${latest:-unknown})…"
-    npm install -g @google/gemini-cli@latest
+    log "'gemini' CLI not found. Installing @google/gemini-cli@latest..."
+    (cd "$PROJECT_ROOT" && npm install)
     return
   fi
 
   if [[ -z "$latest" ]]; then
-    log "Installed gemini-cli v$installed; unable to check latest (network/registry). Continuing."
+    log "Installed gemini-cli v$installed; unable to check latest. Continuing."
     return
   fi
 
-  # Compare semver using sort -V
   newest="$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)"
   if [[ "$newest" != "$installed" ]]; then
     log "Update available: gemini-cli $installed -> $latest. Installing latest…"
-    npm install -g @google/gemini-cli@latest
+    (cd "$PROJECT_ROOT" && npm install)
   else
     log "gemini-cli is up to date (v$installed)."
   fi
 }
-
-# --- Paths ---
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)   # launcher/.. -> project root
 
 # --- Args ---
 
@@ -134,7 +113,7 @@ PY_BIN="$PROJECT_ROOT/venv/bin/python"
 [[ -x "$PY_BIN" ]] || PY_BIN="$PROJECT_ROOT/.venv/bin/python"
 [[ -x "$PY_BIN" ]] || PY_BIN="python3"
 
-GEMINI_API_KEY="$("$PY_BIN" "$SCRIPT_DIR/scripts/select_key.py")"
+GEMINI_API_KEY="$($PY_BIN "$SCRIPT_DIR/scripts/select_key.py")"
 export GEMINI_API_KEY
 log "Using key $(mask_key "$GEMINI_API_KEY") via $(basename "$PY_BIN")"
 
@@ -142,24 +121,34 @@ log "Using key $(mask_key "$GEMINI_API_KEY") via $(basename "$PY_BIN")"
 
 log "Populating context…"
 # "$PY_BIN" "$SCRIPT_DIR/scripts/populate_context.py" --task_id "$TASK_ID"
-log "(Skipped - populate_context.py not implemented)"
+
 
 # --- Ensure gemini CLI exists & is latest ---
-
-if ! have_cmd gemini; then
-  log "'gemini' CLI not found on PATH."
-  ensure_gemini_cli_latest
-else
-  # Even if present, check for update and install if newer exists
-  ensure_gemini_cli_latest
-fi
+ensure_gemini_cli_latest
 
 # --- Run CLI ---
 
-log "Starting Gemini CLI. Use Ctrl+D or type 'exit' to end session."
+log "Starting Gemini CLI."
 echo "---------------------------------------------------------------------"
 cd /
-gemini
+
+case $MODE in
+    "headless")
+        read -p "Enter your prompt: " prompt
+        "$GEMINI_CLI" --prompt "$prompt"
+        ;;
+    "context")
+        "$GEMINI_CLI" --all-files
+        ;;
+    "agentic")
+        read -p "Enter your prompt for the agent to execute: " prompt
+        "$GEMINI_CLI" --prompt "$prompt" --yolo
+        ;;
+    *)
+        "$GEMINI_CLI"
+        ;;
+esac
+
 echo "---------------------------------------------------------------------"
 log "Gemini CLI session ended."
 

@@ -99,11 +99,64 @@ def _detect_optional_columns(cur):
 
 
 def select_key(conn, allow_exhausted=False, reserve_seconds=None, mark_use=False, service=None, verbose=False):
-    # For testing purposes, return a hardcoded API key
-    # Replace 'YOUR_ACTUAL_GEMINI_API_KEY_HERE' with your actual API key
-    api_key = "YOUR_ACTUAL_GEMINI_API_KEY_HERE"
-    key_name = "hardcoded_key"
-    return key_name, api_key
+    with conn.cursor(cursor_factory=DictCursor) as cur:
+        # Build the WHERE clause
+        where_clauses = []
+        if not allow_exhausted:
+            where_clauses.append("(quota_exhausted = FALSE OR quota_exhausted IS NULL)")
+        where_clauses.append("(disabled_until IS NULL OR disabled_until < NOW())")
+        where_clauses.append("daily_request_count < 60") # Assuming a daily limit of 60 requests
+
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        # Build the ORDER BY clause
+        order_sql = "ORDER BY daily_request_count ASC, daily_token_total ASC, last_used ASC NULLS FIRST"
+
+        # Detect the secret column name
+        secret_col = _detect_secret_column(cur)
+        if not secret_col:
+            print("[select_key] No secret column found in api_keys table.", file=sys.stderr)
+            sys.exit(3)
+
+        # Detect optional columns
+        have_cols = _detect_optional_columns(cur)
+
+        # Build the SELECT statement
+        select_cols = ["key_name", secret_col]
+        if have_cols["daily_request_count"]: select_cols.append("daily_request_count")
+        if have_cols["daily_token_total"]: select_cols.append("daily_token_total")
+        if have_cols["last_used"]: select_cols.append("last_used")
+        if have_cols["quota_exhausted"]: select_cols.append("quota_exhausted")
+        if have_cols["disabled_until"]: select_cols.append("disabled_until")
+        if have_cols["service_name"]: select_cols.append("service_name")
+        if have_cols["tags"]: select_cols.append("tags")
+
+        select_sql = f"SELECT {', '.join(select_cols)} FROM api_keys {where_sql} {order_sql} FOR UPDATE SKIP LOCKED LIMIT 1;"
+
+        cur.execute(select_sql)
+        key_info = cur.fetchone()
+
+        if not key_info:
+            return None, None # No available key
+
+        key_name = key_info["key_name"] if "key_name" in key_info else None
+        api_key = key_info[secret_col]
+
+        # Apply mark_use and reserve if requested
+        if mark_use or reserve_seconds:
+            update_clauses = []
+            if mark_use:
+                update_clauses.append("daily_request_count = COALESCE(daily_request_count, 0) + 1")
+                update_clauses.append("last_used = NOW()")
+            if reserve_seconds:
+                update_clauses.append(f"disabled_until = NOW() + INTERVAL '{reserve_seconds} seconds'")
+
+            if update_clauses:
+                update_sql = f"UPDATE api_keys SET {', '.join(update_clauses)} WHERE key_name = %s;"
+                cur.execute(update_sql, (key_name,))
+                conn.commit()
+
+        return key_name, api_key
 
 
 def main():
