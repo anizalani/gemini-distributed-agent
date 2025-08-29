@@ -158,6 +158,7 @@ fi
 
 log "Starting Gemini CLI. Use Ctrl+D or type 'exit' to end session."
 echo "---------------------------------------------------------------------"
+cd /
 gemini
 echo "---------------------------------------------------------------------"
 log "Gemini CLI session ended."
