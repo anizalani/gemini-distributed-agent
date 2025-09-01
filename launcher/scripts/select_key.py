@@ -105,7 +105,6 @@ def select_key(conn, allow_exhausted=False, reserve_seconds=None, mark_use=False
         if not allow_exhausted:
             where_clauses.append("(quota_exhausted = FALSE OR quota_exhausted IS NULL)")
         where_clauses.append("(disabled_until IS NULL OR disabled_until < NOW())")
-        where_clauses.append("daily_request_count < 60") # Assuming a daily limit of 60 requests
 
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 

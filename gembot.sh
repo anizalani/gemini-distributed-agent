@@ -32,6 +32,30 @@ pip install -r requirements.txt >/dev/null 2>&1
 npm install >/dev/null 2>&1
 echo "Setup complete."
 
+# --- Start Web UI if not running ---
+WEB_UI_SCRIPT="/srv/gemini/web_ui.py"
+PID_FILE="$CODE_DIR/logs/web_ui.pid"
+
+# Check if a process is already running
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if ps -p "$PID" > /dev/null; then
+        echo "Web UI is already running (PID: $PID)."
+    else
+        echo "Found a stale PID file. Removing it."
+        rm "$PID_FILE"
+    fi
+fi
+
+# If the PID file doesn't exist, start the process
+if [ ! -f "$PID_FILE" ]; then
+  echo "Starting Web UI..."
+  nohup "$CODE_DIR/venv/bin/python" "$WEB_UI_SCRIPT" > "$CODE_DIR/logs/web_ui.log" 2>&1 &
+  # Store the new PID
+  echo $! > "$PID_FILE"
+  echo "Web UI started (PID: $(cat "$PID_FILE"))."
+fi
+
 # --- Load & export env (so libpq sees PG*/DATABASE_URL) ---
 set -a
 # shellcheck disable=SC1090

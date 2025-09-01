@@ -24,9 +24,9 @@ fi
 
 # --- Database Connection Details ---
 export PGPASSWORD=$POSTGRES_PASSWORD
-DB_NAME="gemini_distributed_agent"
+DB_NAME=$POSTGRES_DB
 DB_USER=$POSTGRES_USER
-DB_HOST="localhost"
+DB_HOST=$POSTGRES_HOST
 
 # --- SQL Command ---
 SQL_COMMAND="UPDATE api_keys SET daily_token_total = 0, daily_request_count = 0, quota_exhausted = FALSE, disabled_until = NULL;"

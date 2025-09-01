@@ -113,9 +113,9 @@ PY_BIN="$PROJECT_ROOT/venv/bin/python"
 [[ -x "$PY_BIN" ]] || PY_BIN="$PROJECT_ROOT/.venv/bin/python"
 [[ -x "$PY_BIN" ]] || PY_BIN="python3"
 
-GEMINI_API_KEY="$($PY_BIN "$SCRIPT_DIR/scripts/select_key.py")"
+eval "$($PY_BIN "$SCRIPT_DIR/scripts/select_key.py" --mark-use --reserve 10 --format env)"
 export GEMINI_API_KEY
-log "Using key $(mask_key "$GEMINI_API_KEY") via $(basename "$PY_BIN")"
+log "Using key $(mask_key "$GEMINI_API_KEY") (name: $KEY_NAME) via $(basename "$PY_BIN")"
 
 # --- (Optional) Context populate hook ---
 
@@ -133,14 +133,14 @@ echo "---------------------------------------------------------------------"
 cd /
 
 case $MODE in
-    "headless")
+    headless)
         read -p "Enter your prompt: " prompt
         "$GEMINI_CLI" --prompt "$prompt"
         ;;
-    "context")
+    context)
         "$GEMINI_CLI" --all-files
         ;;
-    "agentic")
+    agentic)
         read -p "Enter your prompt for the agent to execute: " prompt
         "$GEMINI_CLI" --prompt "$prompt" --yolo
         ;;
@@ -153,6 +153,9 @@ echo "---------------------------------------------------------------------"
 log "Gemini CLI session ended."
 
 # --- Post-session hook ---
+
+log "Tracking API usage…"
+"$PY_BIN" "$SCRIPT_DIR/scripts/track_api_usage.py" --key-name "$KEY_NAME"
 
 log "Logging session details to database…"
 # "$PY_BIN" "$SCRIPT_DIR/scripts/log_session.py" --task_id "$TASK_ID"
