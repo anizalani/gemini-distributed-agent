@@ -10,7 +10,19 @@
         "gemini-cli-aniz-3": "AIzaSyCmZ5WIzjdUdbZ0ScT6ofLxD_v6Kbhay7I",
         "gemini-cli-aniz-6-830656940046": "AIzaSyBLQ_PxlPXEiLj8ot389MlMHY0hYSZsE5o",
         "gemini-cli-aniz-1": "AIzaSyDOQ38BuYtr1PQp6AJvpXcmzhT39bmfFu0",
-        "gemini-cli-aniz-5": "AIzaSyCrMt3SpAqppGrZlhEAFBryVMUD15MHNhQ"
+	"gemini-cli-aniz-12": "AIzaSyD4xFLqsCNfi16TNoaFbQSRykkUAdtEV9U",
+	"gemini-cli-aniz-13": "AIzaSyCoBQTgD2Ys8u67BUpSRJkN9W5fyonDc4w",
+	"gemini-cli-aniz-14": "AIzaSyCif10bMlE6iLPpBIwAujICvSnfBDk4rrI",
+	"gemini-cli-aniz-15": "AIzaSyD45tARFPk2LVp3SBgcLZZz9mCqGyFe1mQ",
+	"gemini-cli-aniz-16": "AIzaSyDVGBVUYPW95lkDFJXHHJ-GbD1a9g-TxOg",
+	"gemini-cli-aniz-17": "AIzaSyAV7gk9g4FKnZefAXH2Rjj2vigsr0fRZL0",
+	"gemini-cli-aniz-18": "AIzaSyDoaQGCDHxPqrOKQGRZt6q_bnOpuiiaEuk",
+	"gemini-cli-aniz-19": "AIzaSyBTn26su2SeXfWKWHw-n7d6K7-7FLUMHbU",
+	"gemini-cli-aniz-20": "AIzaSyDmCu-WZ2pMsQYz6mSVwDlXPMqEk3rFQxE",
+	"gemini-cli-aniz-21": "AIzaSyD-RbwjR_eTOHKv1TBD9jz6FcEM5iyQnaI",
+	"gemini-cli-aniz-22": "AIzaSyClBYUdutmgx2rtgq_cGPculEtq5QkCm40",
+	"gemini-cli-aniz-23": "AIzaSyBmWuQ_GXMeYVccwCNKB-i8yQbqA8UpQGo",
+	"gemini-cli-aniz-24": "AIzaSyC8kRORZ76h3WB8PxEpPcMcypS7ZFdCQhs"
     },
     "openai": {
         "api_key": "YOUR_OPENAI_API_KEY"

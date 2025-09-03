@@ -178,6 +178,29 @@ def get_available_key(cur, redis_conn):
     return keys[0]
 
 
+def release_key(key_name):
+    """Updates the last_used timestamp for a key, making it available again."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            logging.error("Could not get database connection to release key.")
+            return
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE api_keys
+                SET last_used = NOW()
+                WHERE key_name = %s;
+            """, (key_name,))
+            conn.commit()
+            logging.info(f"Successfully released API key '{key_name}'.")
+    except Exception as e:
+        logging.error(f"Failed to release key '{key_name}': {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def throttle_if_needed(cur, key_name):
     """Sleeps if the key was used too recently to avoid rate limits."""
     cur.execute("SELECT last_used FROM api_keys WHERE key_name = %s;", (key_name,))

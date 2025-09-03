@@ -85,16 +85,19 @@ echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode ---"
 
 # --- Load env ---
 
-CONFIG_PATH="$SCRIPT_DIR/config/.env"
-if [[ -f "$CONFIG_PATH" ]]; then
-  log "Loading environment from $CONFIG_PATH"
-  set -a
-  # shellcheck disable=SC1090
-  . "$CONFIG_PATH"
-  set +a
-else
-  log "Warning - Configuration file not found at $CONFIG_PATH"
-fi
+ENV_FILES= ("$PROJECT_ROOT/.env" "$PROJECT_ROOT/.postgres.env")
+
+for ENV_FILE in "${ENV_FILES[@]}"; do
+  if [[ -f "$ENV_FILE" ]]; then
+    log "Loading environment from $ENV_FILE"
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  else
+    log "Warning - Environment file not found at $ENV_FILE"
+  fi
+done
 
 # Ensure libpq sees credentials even if DSN omits them
 export PGHOST="${PGHOST:-localhost}"
