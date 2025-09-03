@@ -107,3 +107,4 @@ node_modules/
 
 # logs
 *.log
+llm_platform_config.json
