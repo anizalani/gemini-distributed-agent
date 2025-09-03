@@ -4,12 +4,19 @@ from flask import Flask, render_template, Response, request
 import logging
 from queue import Queue
 from threading import Thread
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
+log_dir = os.getenv('GEMINI_WORKSPACE', '/tmp')
+log_file = os.path.join(log_dir, 'web_ui.log')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='/srv/gemini_workspace/web_ui.log',
+    filename=log_file,
     filemode='a'
 )
 logger = logging.getLogger(__name__)
