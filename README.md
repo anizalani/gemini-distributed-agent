@@ -258,13 +258,20 @@ This file is used by the `llm_router.py` script and contains API keys for variou
 ```json
 {
     "gemini": {
-        "gemini-cli-aniz-2": "YOUR_API_KEY_HERE",
+        "key1": "YOUR_API_KEY_HERE",
+        "key2": "YOUR_API_KEY_HERE",
         ...
     },
     "openai": {
         "api_key": "YOUR_OPENAI_API_KEY"
     },
-    ...
+    "merlin": {
+        "api_key": "YOUR_MERLIN_API_KEY"
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "model": "llama3"
+    }
 }
 ```
 
