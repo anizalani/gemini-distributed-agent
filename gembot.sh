@@ -1,20 +1,63 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $EUID -ne 0 ]]; then
-  echo "This script needs to run with root privileges to access certain directories."
-  echo "Attempting to re-run with sudo..."
-  exec sudo "$0" "$@"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# --- Argument Parsing ---
+DIRECT_MODE=""
+DIRECT_MODEL=""
+
+usage() {
+    echo "Usage: $0 [-r] [-i] [-h] [-c] [-a] [-m <model_name>]"
+    echo "  -r: Run in RAG Interactive Mode"
+    echo "  -i: Run in Interactive Mode"
+    echo "  -h: Run in Headless Mode"
+    echo "  -c: Run in Context-Aware Mode"
+    echo "  -a: Run in Agentic Mode"
+    echo "  -m <model_name>: Specify Gemini model (e.g., gemini-2.5-flash, gemini-2.5-pro). Required for -r and -i."
+    exit 1
+}
+
+while getopts "rihcahm:" opt; do
+    case $opt in
+        r) DIRECT_MODE="rag_interactive" ;;
+        i) DIRECT_MODE="interactive" ;;
+        h) DIRECT_MODE="headless" ;;
+        c) DIRECT_MODE="context" ;;
+        a) DIRECT_MODE="agentic" ;;
+        m) DIRECT_MODEL="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND-1))
+
+if [[ -n "$DIRECT_MODE" ]]; then
+    if [[ ("$DIRECT_MODE" == "rag_interactive" || "$DIRECT_MODE" == "interactive") && -z "$DIRECT_MODEL" ]]; then
+        echo "Error: -m <model_name> is required for $DIRECT_MODE mode."
+        usage
+    fi
+    if [[ ("$DIRECT_MODE" == "headless" || "$DIRECT_MODE" == "context" || "$DIRECT_MODE" == "agentic") && -n "$DIRECT_MODEL" ]]; then
+        echo "Warning: -m <model_name> is not applicable for $DIRECT_MODE mode and will be ignored."
+    fi
 fi
 
 # --- Paths ---
 
 # Source the .env file to get the project paths
+# This is done before the sudo check so the environment can be preserved.
 if [ -f "/home/ubuntu/gemini-distributed-agent/.env" ]; then
     . "/home/ubuntu/gemini-distributed-agent/.env"
+    export GEMINI_API_KEY
+fi
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This script needs to run with root privileges to access certain directories."
+  echo "Attempting to re-run with sudo..."
+  exec sudo -E "$0" "$@"
 fi
 
 CODE_DIR="${CODE_DIR:-/home/ubuntu/gemini-distributed-agent}"
+export CODE_DIR
 WORKSPACE_DIR="${GEMINI_WORKSPACE:-/home/ubuntu/gemini_workspace}"
 
 ENV_FILE="$CODE_DIR/.postgres.env"
@@ -41,30 +84,6 @@ pip install -r requirements.txt >/dev/null 2>&1
 npm install >/dev/null 2>&1
 echo "Setup complete."
 
-# --- Start Web UI if not running ---
-WEB_UI_SCRIPT="/srv/gemini/web_ui.py"
-PID_FILE="$CODE_DIR/logs/web_ui.pid"
-
-# Check if a process is already running
-if [ -f "$PID_FILE" ]; then
-    PID=$(cat "$PID_FILE")
-    if ps -p "$PID" > /dev/null; then
-        echo "Web UI is already running (PID: $PID)."
-    else
-        echo "Found a stale PID file. Removing it."
-        rm "$PID_FILE"
-    fi
-fi
-
-# If the PID file doesn't exist, start the process
-if [ ! -f "$PID_FILE" ]; then
-  echo "Starting Web UI..."
-  nohup "$CODE_DIR/venv/bin/python" "$WEB_UI_SCRIPT" > "$CODE_DIR/logs/web_ui.log" 2>&1 &
-  # Store the new PID
-  echo $! > "$PID_FILE"
-  echo "Web UI started (PID: $(cat "$PID_FILE"))."
-fi
-
 # --- Load & export env (so libpq sees PG*/DATABASE_URL) ---
 set -a
 # shellcheck disable=SC1090
@@ -72,17 +91,74 @@ set -a
 set +a
 
 # Be explicit (belt & suspenders)
-export PGHOST="${PGHOST:-localhost}"
-export PGPORT="${PGPORT:-5432}"
-export PGDATABASE="${PGDATABASE:-gemini_agents}"
-export PGUSER="${PGUSER:-gemini_user}"
-export PGPASSWORD="${PGPASSWORD:-}"
-export DATABASE_URL="${DATABASE_URL:-}"
+PGHOST="${POSTGRES_HOST:-localhost}"
+PGPORT="${POSTGRES_PORT:-5432}"
+PGDATABASE="${POSTGRES_DB:-gemini_agents}"
+PGUSER="${POSTGRES_USER:-gemini_user}"
+PGPASSWORD="${POSTGRES_PASSWORD:-}"
+DATABASE_URL="${DATABASE_URL:-}"
+
+# Export these variables for child processes, especially for RAG interactive mode
+export PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD DATABASE_URL
+
+# --- Manage Web UI process ---
+WEB_UI_SCRIPT="/srv/gemini/web_ui.py"
+PID_FILE="$CODE_DIR/logs/web_ui.pid"
+
+# Check if a process is already running and kill it
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if ps -p "$PID" > /dev/null; then
+        echo "Web UI is running (PID: $PID). Terminating..."
+        kill "$PID"
+        # Wait for the process to terminate
+        while ps -p "$PID" > /dev/null; do sleep 1; done
+        echo "Web UI terminated."
+    else
+        echo "Found a stale PID file. Removing it."
+        rm "$PID_FILE"
+    fi
+fi
+
+# Start the Web UI
+echo "Starting Web UI..."
+nohup "$CODE_DIR/venv/bin/python" "$WEB_UI_SCRIPT" > "$CODE_DIR/logs/web_ui.log" 2>&1 &
+# Store the new PID
+echo $! > "$PID_FILE"
+echo "Web UI started (PID: $(cat "$PID_FILE"))."
+
+
 
 # --- Switch to workspace as the project folder ---
 cd "$WORKSPACE_DIR"
 
 # --- Main Menu Loop ---
+if [[ -n "$DIRECT_MODE" ]]; then
+    TASK_ID="$(TZ=America/Chicago date +%F-%H%M)"
+    case "$DIRECT_MODE" in
+        "rag_interactive")
+            "$SCRIPT_DIR/launcher/rag_interactive_session.sh" "$DIRECT_MODEL"
+            ;;
+        "interactive")
+            "$LAUNCHER" "$TASK_ID" "interactive" "$DIRECT_MODEL"
+            ;;
+        "headless")
+            "$LAUNCHER" "$TASK_ID" "headless"
+            ;;
+        "context")
+            "$LAUNCHER" "$TASK_ID" "context"
+            ;;
+        "agentic")
+            "$LAUNCHER" "$TASK_ID" "agentic"
+            ;;
+        *)
+            echo "Invalid direct mode: $DIRECT_MODE"
+            exit 1
+            ;;
+    esac
+    exit 0
+fi
+
 while true; do
     echo
     echo "--- Gemini Gembot Menu ---"
@@ -91,6 +167,7 @@ while true; do
         "Headless Mode: For single-shot commands."
         "Context-Aware Mode: Interactive session with all files in the current directory as context."
         "Agentic Mode: Autonomous execution of a prompt."
+        "RAG Interactive Mode: Interactive session with database-augmented context."
         "Quit"
     )
     select opt in "${options[@]}"; do
@@ -99,7 +176,27 @@ while true; do
 
         case $opt in
             "Interactive Mode: Default, for direct interaction.")
-                "$LAUNCHER" "$TASK_ID" "interactive"
+                echo
+                echo "--- Choose Gemini Model ---"
+                model_options=(
+                    "gemini-2.5-flash"
+                    "gemini-2.5-pro"
+                )
+                select model_opt in "${model_options[@]}"; do
+                    case $model_opt in
+                        "gemini-2.5-flash")
+                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-flash"
+                            break
+                            ;;
+                        "gemini-2.5-pro")
+                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-pro"
+                            break
+                            ;;
+                        *)
+                            echo "Invalid option $REPLY. Please try again."
+                            ;;
+                    esac
+                done
                 break
                 ;;
             "Headless Mode: For single-shot commands.")
@@ -114,11 +211,39 @@ while true; do
                 "$LAUNCHER" "$TASK_ID" "agentic"
                 break
                 ;;
+            "RAG Interactive Mode: Interactive session with database-augmented context.")
+                echo
+                echo "--- Choose Gemini Model for RAG Session ---"
+                model_options=(
+                    "gemini-2.5-flash"
+                    "gemini-2.5-pro"
+                )
+                select model_opt in "${model_options[@]}"; do
+                    case $model_opt in
+                        "gemini-2.5-flash")
+                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-flash"
+                            break
+                            ;;
+                        "gemini-2.5-pro")
+                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-pro"
+                            break
+                            ;;
+                        *)
+                            echo "Invalid option $REPLY. Please try again."
+                            ;;
+                    esac
+                done
+                break
+                ;;
             "Quit")
                 echo "Exiting."
                 exit 0
                 ;;
             *)
+                if [[ "$REPLY" == "/quit" ]]; then
+                    echo "Exiting."
+                    exit 0
+                fi
                 echo "Invalid option $REPLY. Please try again."
                 break
                 ;;

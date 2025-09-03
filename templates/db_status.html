@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Gemini DB Status{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Gemini Database Status</h1>
+
+    {% if error %}
+        <p class="alert alert-danger">Error: {{ error }}</p>
+    {% else %}
+        <h2 class="mt-4">Tables</h2>
+        {% if tables %}
+            <ul class="list-group">
+                {% for table in tables %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ table }}
+                        {% if table == 'documents' %}
+                            <a href="/view_table/{{ table }}" class="badge bg-primary rounded-pill">View Data</a>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="alert alert-info">No tables found in the database.</p>
+        {% endif %}
+
+        <h2 class="mt-4">Active Connections</h2>
+        {% if active_connections %}
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>User</th>
+                            <th>Database</th>
+                            <th>Client Addr</th>
+                            <th>Client Port</th>
+                            <th>Backend Start</th>
+                            <th>State</th>
+                            <th>Query</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for conn in active_connections %}
+                            <tr>
+                                <td>{{ conn[0] }}</td>
+                                <td>{{ conn[1] }}</td>
+                                <td>{{ conn[2] }}</td>
+                                <td>{{ conn[3] }}</td>
+                                <td>{{ conn[4] }}</td>
+                                <td>{{ conn[5] }}</td>
+                                <td>{{ conn[6] }}</td>
+                                <td>{{ conn[7] }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="alert alert-info">No active connections to the database.</p>
+        {% endif %}
+    {% endif %}
+{% endblock %}
