@@ -53,7 +53,22 @@ The system has three main components:
 
 ## 4. Usage
 
-### 4.1. Running a Task
+### 4.1. Using the `gembot` Command
+
+A convenient way to run the Gemini Distributed Agent is to use the `gembot` command, which is a symlink to the `gembot.sh` script. This script provides a menu-driven interface for launching the agent in different modes.
+
+```bash
+gembot
+```
+
+This will present you with a menu of options:
+
+*   **Interactive Mode:** The default mode, for direct interaction with the agent.
+*   **Headless Mode:** For single-shot commands.
+*   **Context-Aware Mode:** Interactive session with all files in the current directory as context.
+*   **Agentic Mode:** Autonomous execution of a prompt.
+
+### 4.2. Running a Task Directly
 
 The primary entry point for the Gemini Distributed Agent is the `launch_gemini_task.sh` script.
 
