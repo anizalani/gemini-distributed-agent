@@ -85,7 +85,7 @@ echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode ---"
 
 # --- Load env ---
 
-ENV_FILES= ("$PROJECT_ROOT/.env" "$PROJECT_ROOT/.postgres.env")
+# ENV_FILES= ("$PROJECT_ROOT/.env" "$PROJECT_ROOT/.postgres.env") - commented out for sh compatibility
 
 for ENV_FILE in "${ENV_FILES[@]}"; do
   if [[ -f "$ENV_FILE" ]]; then
