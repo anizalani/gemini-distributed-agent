@@ -256,7 +256,7 @@ This file is used by the `llm_router.py` script and contains API keys for variou
 ```json
 {
     "gemini": {
-        "gemini-cli-aniz-2": "AIzaSyCyQBnNO76ZfScU1Xj1Z0-tV4HOGP1WoKk",
+        "gemini-cli-aniz-2": "YOUR_API_KEY_HERE",
         ...
     },
     "openai": {
