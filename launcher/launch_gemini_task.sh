@@ -73,19 +73,20 @@ ensure_gemini_cli_latest() {
 # --- Args ---
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <task_id> [mode]"
-  echo "Example: $0 task-20250728-alpha interactive"
+  echo "Usage: $0 <task_id> [mode] [model]"
+  echo "Example: $0 task-20250728-alpha interactive gemini-2.5-flash"
   exit 1
 fi
 
 TASK_ID="$1"
 MODE="${2:-interactive}"
+MODEL="${3:-gemini-2.5-pro}"
 
-echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode ---"
+echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode with model [$MODEL] ---"
 
 # --- Load env ---
 
-# ENV_FILES= ("$PROJECT_ROOT/.env" "$PROJECT_ROOT/.postgres.env") - commented out for sh compatibility
+ENV_FILES=("$PROJECT_ROOT/.env" "$PROJECT_ROOT/.postgres.env")
 
 for ENV_FILE in "${ENV_FILES[@]}"; do
   if [[ -f "$ENV_FILE" ]]; then
@@ -104,7 +105,7 @@ export PGHOST="${PGHOST:-localhost}"
 export PGPORT="${PGPORT:-5432}"
 export PGDATABASE="${PGDATABASE:-gemini_agents}"
 export PGUSER="${PGUSER:-gemini_user}"
-export PGPASSWORD="${PGPASSWORD:-}"
+export PGPASSWORD="${POSTGRES_PASSWORD:-}"
 export DATABASE_URL="${DATABASE_URL:-}"
 
 # --- Select API key ---
@@ -138,17 +139,20 @@ cd /
 case $MODE in
     headless)
         read -p "Enter your prompt: " prompt
-        "$GEMINI_CLI" --prompt "$prompt"
+        "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt"
         ;;
     context)
-        "$GEMINI_CLI" --all-files
+        "$GEMINI_CLI" --model "$MODEL" --all-files
         ;;
     agentic)
         read -p "Enter your prompt for the agent to execute: " prompt
-        "$GEMINI_CLI" --prompt "$prompt" --yolo
+        "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt" --yolo
+        ;;
+    rag_interactive)
+        "$PY_BIN" "$PROJECT_ROOT/scripts/rag_interactive.py" --model "$MODEL"
         ;;
     *)
-        "$GEMINI_CLI"
+        "$GEMINI_CLI" --model "$MODEL"
         ;;
 esac
 

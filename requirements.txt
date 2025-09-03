@@ -5,3 +5,5 @@ pytz
 flask
 redis
 requests
+pgvector
+sentence-transformers

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}View Table: {{ table_name }}{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Table: <span class="text-primary">{{ table_name }}</span></h1>
+
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-hover">
+                <thead>
+                    <tr>
+                        {% for column in columns %}
+                            <th>{{ column }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                        <tr id="row-{{ row[0] }}"> {# Add ID to the row #}
+                            {% for i in range(columns|length) %}
+                                <td>
+                                    {% if columns[i] == 'created_at' and row[i] %}
+                                        {{ row[i].strftime('%Y-%m-%d %H:%M:%S %Z') }}
+                                    {% elif columns[i] == 'content' or columns[i] == 'gemini_output' %}
+                                        <div style="max-height: 150px; overflow-y: auto; white-space: pre-wrap;">{{ row[i] }}</div>
+                                    {% elif columns[i] == 'source_documents' %}
+                                        {% if row[i] %}
+                                            {% set source_ids_str = row[i] %}
+                                            {% if source_ids_str is string %}
+                                                {% set source_ids = source_ids_str | from_json %}
+                                            {% else %}
+                                                {% set source_ids = source_ids_str %}
+                                            {% endif %}
+                                            {% if source_ids is iterable and source_ids is not string %}
+                                                {% for doc_id in source_ids %}
+                                                    <a href="#row-{{ doc_id }}">{{ doc_id }}</a>{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                {{ source_ids_str }}
+                                            {% endif %}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    {% elif columns[i] == 'id' %}
+                                        <a href="#row-{{ row[i] }}">{{ row[i] }}</a>
+                                    {% else %}
+                                        {{ row[i] }}
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}
