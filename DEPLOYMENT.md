@@ -58,7 +58,7 @@ We have created a `deploy.sh` script to automate the deployment process.
 
 ## 3. Post-Deployment
 
-Once you have completed the deployment and configuration steps, you can start using the Gemini Distributed Agent on the new host. Refer to the `CONSOLIDATED_README.md` file for detailed usage instructions.
+Once you have completed the deployment and configuration steps, you can start using the Gemini Distributed Agent on the new host. Refer to the `README.md` file for detailed usage instructions.
 
 ### Security Considerations
 

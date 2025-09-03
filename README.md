@@ -243,9 +243,11 @@ POSTGRES_PORT=5432
 
 This file is used to configure other environment variables for the application.
 
+*   `CODE_DIR`: The absolute path to the project directory.
 *   `GEMINI_WORKSPACE`: The absolute path to the directory where logs and other artifacts will be stored.
 
 ```
+CODE_DIR=/path/to/your/project
 GEMINI_WORKSPACE=/path/to/your/workspace
 ```
 
@@ -277,6 +279,18 @@ This file is used to configure the permissions for the agent.
             "denylist": [
                 "shutdown"
             ]
+        },
+        "weak": {
+            "allowlist": [
+                "ls",
+                "docker",
+                ...
+            ]
+        }
+    }
+}
+```
+       ]
         },
         "weak": {
             "allowlist": [
