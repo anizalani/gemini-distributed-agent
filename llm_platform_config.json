@@ -22,7 +22,7 @@
 	"gemini-cli-aniz-21": "AIzaSyD-RbwjR_eTOHKv1TBD9jz6FcEM5iyQnaI",
 	"gemini-cli-aniz-22": "AIzaSyClBYUdutmgx2rtgq_cGPculEtq5QkCm40",
 	"gemini-cli-aniz-23": "AIzaSyBmWuQ_GXMeYVccwCNKB-i8yQbqA8UpQGo",
-	"gemini-cli-aniz-24": "AIzaSyC8kRORZ76h3WB8PxEpPcMcypS7ZFdCQhs"
+	"key24": "YOUR_API_KEY_HERE"
     },
     "openai": {
         "api_key": "YOUR_OPENAI_API_KEY"

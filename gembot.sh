@@ -8,10 +8,19 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # --- Paths ---
-CODE_DIR="/srv/gemini"                     # Python code + venv + requirements.txt
-WORKSPACE_DIR="/srv/gemini_workspace"      # project working directory
-ENV_FILE="$CODE_DIR/launcher/config/.env"  # keep env here per your setup
+
+# Source the .env file to get the project paths
+if [ -f "/home/ubuntu/gemini-distributed-agent/.env" ]; then
+    . "/home/ubuntu/gemini-distributed-agent/.env"
+fi
+
+CODE_DIR="${CODE_DIR:-/home/ubuntu/gemini-distributed-agent}"
+WORKSPACE_DIR="${GEMINI_WORKSPACE:-/home/ubuntu/gemini_workspace}"
+
+ENV_FILE="$CODE_DIR/.postgres.env"
 LAUNCHER="$CODE_DIR/launcher/launch_gemini_task.sh"
+WEB_UI_SCRIPT="$CODE_DIR/web_ui.py"
+PID_FILE="$CODE_DIR/logs/web_ui.pid"
 
 # --- Sanity checks ---
 [[ -x "$LAUNCHER" ]] || { echo "Launcher not found/executable: $LAUNCHER"; exit 1; }
