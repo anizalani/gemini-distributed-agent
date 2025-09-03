@@ -1,0 +1,37 @@
+{
+    "gemini": {
+        "gemini-cli-aniz-2": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-10-334746887974": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-4": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-11-697628982418": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-7-652174891869": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-9-232547135499": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-8-293551717499": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-3": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-6-830656940046": "YOUR_API_KEY_HERE",
+        "gemini-cli-aniz-1": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-12": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-13": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-14": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-15": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-16": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-17": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-18": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-19": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-20": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-21": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-22": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-23": "YOUR_API_KEY_HERE",
+	"gemini-cli-aniz-24": "YOUR_API_KEY_HERE"
+    },
+    "openai": {
+        "api_key": "YOUR_OPENAI_API_KEY"
+    },
+    "merlin": {
+        "api_key": "YOUR_MERLIN_API_KEY"
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "model": "llama3"
+    }
+}
