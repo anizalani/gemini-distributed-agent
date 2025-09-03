@@ -219,7 +219,7 @@ This file contains the connection details for the PostgreSQL database:
 ```
 POSTGRES_DB=postgres
 POSTGRES_USER=gemini_user
-POSTGRES_PASSWORD="gvh!qkm0yfd6CFY4kuv"
+POSTGRES_PASSWORD="your_password_here"
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 ```
