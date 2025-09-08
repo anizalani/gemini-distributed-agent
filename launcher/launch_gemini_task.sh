@@ -26,7 +26,7 @@ log() { echo "LAUNCHER: $*"; }
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)   # launcher/.. -> project root
-CMD="/usr/bin/gemini-cli"
+CMD="/usr/bin/gemini"
 GEMINI_CLI="$CMD" # Add this line
 have_cmd() { [[ -x "$GEMINI_CLI" ]]; }
 
