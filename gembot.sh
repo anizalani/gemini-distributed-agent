@@ -88,50 +88,6 @@ LAUNCHER="$CODE_DIR/launcher/launch_gemini_task.sh"
 WEB_UI_SCRIPT="$CODE_DIR/web_ui.py"
 PID_FILE="$CODE_DIR/logs/web_ui.pid"
 
-# --- Git Status Check ---
-echo "Checking git status for gemini-distributed-agent..."
-cd "$CODE_DIR"
-
-# Fetch the latest info from the remote
-git fetch
-
-STATUS_OUTPUT=$(git status)
-
-# Condition: Remote is ahead
-if echo "$STATUS_OUTPUT" | grep -q "Your branch is behind"; then
-    echo "Remote is ahead. Pulling changes..."
-    git pull
-
-# Condition: Local is ahead
-elif echo "$STATUS_OUTPUT" | grep -q "Your branch is ahead"; then
-    echo "Local is ahead. Adding, committing, and pushing changes..."
-    git add .
-    # Only commit if there are changes to be committed
-    if ! git diff-index --quiet HEAD --; then
-        git commit -m "gembot.sh: Auto-commit local changes"
-    fi
-    git push
-
-# Condition: Untracked files or changes that are not staged for commit
-elif ! echo "$STATUS_OUTPUT" | grep -q "nothing to commit, working tree clean"; then
-    echo "Untracked files or local changes detected. Adding, committing, and pushing..."
-    git add .
-    git commit -m "gembot.sh: Auto-commit local changes"
-    git push
-
-# Condition: Diverged or other complex states
-elif echo "$STATUS_OUTPUT" | grep -q "have diverged"; then
-    echo "Warning: Local and remote repositories have conflicts or have diverged."
-    read -p "Do you want to continue? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Exiting."
-        exit 1
-    fi
-else
-    # This case is for "up to date" and "working tree clean"
-    echo "Git repository is up to date."
-fi
 
 # --- Symlink Setup ---
 # Create /srv if it doesn't exist
@@ -244,7 +200,7 @@ if [[ -n "$DIRECT_MODE" ]]; then
     TASK_ID="$(TZ=America/Chicago date +%F-%H%M)"
     case "$DIRECT_MODE" in
         "rag_interactive")
-            "$SCRIPT_DIR/launcher/rag_interactive_session.sh" "$DIRECT_MODEL"
+            "$CODE_DIR/launcher/rag_interactive_session.sh" "$DIRECT_MODEL"
             ;;
         "interactive")
             "$LAUNCHER" "$TASK_ID" "interactive" "$DIRECT_MODEL"
