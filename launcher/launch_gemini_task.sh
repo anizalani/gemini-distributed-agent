@@ -27,7 +27,7 @@ log() { echo "LAUNCHER: $*"; }
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)   # launcher/.. -> project root
 CMD="/usr/bin/gemini-cli"
-
+GEMINI_CLI="$CMD" # Add this line
 have_cmd() { [[ -x "$GEMINI_CLI" ]]; }
 
 installed_gemini_version() {
