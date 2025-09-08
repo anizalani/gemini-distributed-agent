@@ -1,38 +1,34 @@
 {
     "gemini": {
-        "REDACTED_KEY_1": "REDACTED_API_KEY_1",
-        "REDACTED_KEY_2": "REDACTED_API_KEY_2",
-        "REDACTED_KEY_3": "REDACTED_API_KEY_3",
-        "REDACTED_KEY_4": "REDACTED_API_KEY_4",
-        "REDACTED_KEY_5": "REDACTED_API_KEY_5",
-        "REDACTED_KEY_6": "REDACTED_API_KEY_6",
-        "REDACTED_KEY_7": "REDACTED_API_KEY_7",
-        "REDACTED_KEY_8": "REDACTED_API_KEY_8",
-        "REDACTED_KEY_9": "REDACTED_API_KEY_9",
-        "REDACTED_KEY_10": "REDACTED_API_KEY_10",
-        "REDACTED_KEY_11": "REDACTED_API_KEY_11",
-        "REDACTED_KEY_12": "REDACTED_API_KEY_12",
-        "REDACTED_KEY_13": "REDACTED_API_KEY_13",
-        "REDACTED_KEY_14": "REDACTED_API_KEY_14",
-        "REDACTED_KEY_15": "REDACTED_API_KEY_15",
-        "REDACTED_KEY_16": "REDACTED_API_KEY_16",
-        "REDACTED_KEY_17": "REDACTED_API_KEY_17",
-        "REDACTED_KEY_18": "REDACTED_API_KEY_18",
-        "REDACTED_KEY_19": "REDACTED_API_KEY_19",
-        "REDACTED_KEY_20": "REDACTED_API_KEY_20",
-        "REDACTED_KEY_21": "REDACTED_API_KEY_21",
-        "REDACTED_KEY_22": "REDACTED_API_KEY_22",
-        "REDACTED_KEY_23": "REDACTED_API_KEY_23",
-        "REDACTED_KEY_24": "REDACTED_API_KEY_24"
+        "key14": "AIzaSyCif10bMlE6iLPpBIwAujICvSnfBDk4rrI",
+        "key2": "AIzaSyCyQBnNO76ZfScU1Xj1Z0-tV4HOGP1WoKk",
+        "key22": "AIzaSyClBYUdutmgx2rtgq_cGPculEtq5QkCm40",
+        "key19": "AIzaSyBTn26su2SeXfWKWHw-n7d6K7-7FLUMHbU",
+        "key11": "AIzaSyD5_3QVIwmqBow-1uU6iGIgvUEcFXgR4ng",
+        "gemini-cli-aniz-5": "AIzaSyCrMt3SpAqppGrZlhEAFBryVMUD15MHNhQ",
+        "key17": "AIzaSyAV7gk9g4FKnZefAXH2Rjj2vigsr0fRZL0",
+        "key6": "AIzaSyBLQ_PxlPXEiLj8ot389MlMHY0hYSZsE5o",
+        "key21": "AIzaSyD-RbwjR_eTOHKv1TBD9jz6FcEM5iyQnaI",
+        "key13": "AIzaSyCoBQTgD2Ys8u67BUpSRJkN9W5fyonDc4w",
+        "key10": "AIzaSyD3Ovue4x5qm4IwkSLltfLZN1VGZxiRqbQ",
+        "key9": "AIzaSyCnvcr_HGA0_rr76fruBXrlYFPO4eAhQo8",
+        "key4": "AIzaSyCJ1uB1sHmEtcvw9oi238ag-77dQHdJdVA",
+        "key16": "AIzaSyDVGBVUYPW95lkDFJXHHJ-GbD1a9g-TxOg",
+        "key7": "AIzaSyDvOr8wLizItfMojogeboSOcFmxGY4i4ws",
+        "key3": "AIzaSyCmZ5WIzjdUdbZ0ScT6ofLxD_v6Kbhay7I",
+        "gemini-cli-aniz-.18": "AIzaSyDoaQGCDHxPqrOKQGRZt6q_bnOpuiiaEuk",
+        "key20": "AIzaSyDmCu-WZ2pMsQYz6mSVwDlXPMqEk3rFQxE",
+        "key1": "AIzaSyDOQ38BuYtr1PQp6AJvpXcmzhT39bmfFu0",
+        "key15": "AIzaSyD45tARFPk2LVp3SBgcLZZz9mCqGyFe1mQ",
+        "key12": "AIzaSyD4xFLqsCNfi16TNoaFbQSRykkUAdtEV9U",
+        "key8": "AIzaSyAd3LMzrLjrWMt8zk6lbwV_o8RKNrJnNPY",
+        "key23": "AIzaSyBmWuQ_GXMeYVccwCNKB-i8yQbqA8UpQGo",
+        "key24": "AIzaSyC8kRORZ76h3WB8PxEpPcMcypS7ZFdCQhs"
     },
     "openai": {
-        "api_key": "REDACTED_OPENAI_API_KEY"
+        "api_key": "YOUR_OPENAI_API_KEY"
     },
     "merlin": {
-        "api_key": "REDACTED_MERLIN_API_KEY"
-    },
-    "ollama": {
-        "base_url": "http://localhost:11434/v1",
-        "model": "llama3"
+        "api_key": "YOUR_MERLIN_API_KEY"
     }
 }
