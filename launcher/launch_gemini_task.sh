@@ -149,7 +149,7 @@ case $MODE in
         "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt" --yolo
         ;;
     rag_interactive)
-        "$PY_BIN" "$PROJECT_ROOT/scripts/rag_interactive.py" --model "$MODEL"
+        "$PROJECT_ROOT/launcher/rag_interactive_session.sh" "$MODEL"
         ;;
     *)
         "$GEMINI_CLI" --model "$MODEL"
