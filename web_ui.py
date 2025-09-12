@@ -83,6 +83,7 @@ def index():
 def run():
     global process
     mode = request.args.get('mode')
+    prompt = request.args.get('prompt', '')  # Get optional prompt
     if not mode:
         return Response("Missing 'mode' parameter", status=400)
 
@@ -104,6 +105,8 @@ def run():
             task_id = task_id_process.stdout.strip()
 
             command = [LAUNCHER, task_id, mode]
+            if prompt:
+                command.append(prompt)  # Add prompt to command if it exists
             logger.info(f"Executing command: {' '.join(command)}")
 
             process = subprocess.Popen(

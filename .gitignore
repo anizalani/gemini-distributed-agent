@@ -90,6 +90,7 @@ ENV/
 env/
 ENV/
 llm_platform_config.json
+.postgres.env
 
 # Spyder project settings
 .spyderproject

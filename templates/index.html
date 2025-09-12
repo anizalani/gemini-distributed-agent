@@ -8,16 +8,16 @@
             <h1 class="display-5 fw-bold">Execution Modes</h1>
             <p class="col-md-8 fs-4">Select a mode to run the Gemini agent. The output will be streamed below.</p>
              <div class="row g-3">
-                <div class="col-md-3 col-6">
+                <div class="col-12 col-md-3">
                     <button class="btn btn-primary w-100 btn-lg btn-custom" onclick="runMode('interactive')">Start Chat</button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-12 col-md-3">
                     <button class="btn btn-success w-100 btn-lg btn-custom" onclick="runMode('headless')">Headless</button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-12 col-md-3">
                     <button class="btn btn-info w-100 btn-lg btn-custom" onclick="runMode('context')">Context-Aware</button>
                 </div>
-                <div class="col-md-3 col-6">
+                <div class="col-12 col-md-3">
                     <button class="btn btn-warning w-100 btn-lg btn-custom" onclick="runMode('agentic')">Agentic</button>
                 </div>
             </div>
@@ -105,5 +105,12 @@
 
             chatInput.value = '';
         }
+
+        // Add event listener for Enter key
+        document.getElementById('chatInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
     </script>
 {% endblock %}
