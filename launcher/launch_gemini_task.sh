@@ -73,14 +73,20 @@ ensure_gemini_cli_latest() {
 # --- Args ---
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <task_id> [mode] [model]"
-  echo "Example: $0 task-20250728-alpha interactive gemini-2.5-flash"
+  echo "Usage: $0 <task_id> [mode] [model] [--yolo]"
+  echo "Example: $0 task-20250728-alpha interactive gemini-2.5-flash --yolo"
   exit 1
 fi
 
 TASK_ID="$1"
 MODE="${2:-interactive}"
 MODEL="${3:-gemini-2.5-pro}"
+YOLO_ARG="${4:-}"
+
+YOLO_FLAG=""
+if [[ "$YOLO_ARG" == "--yolo" ]]; then
+    YOLO_FLAG="--yolo"
+fi
 
 echo "--- LAUNCHER: Initializing Task [$TASK_ID] in [$MODE] mode with model [$MODEL] ---"
 
@@ -139,20 +145,20 @@ cd /
 case $MODE in
     headless)
         read -p "Enter your prompt: " prompt
-        "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt"
+        "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt" "$YOLO_FLAG"
         ;;
     context)
-        "$GEMINI_CLI" --model "$MODEL" --all-files
+        "$GEMINI_CLI" --model "$MODEL" --all-files "$YOLO_FLAG"
         ;;
     agentic)
         read -p "Enter your prompt for the agent to execute: " prompt
         "$GEMINI_CLI" --model "$MODEL" --prompt "$prompt" --yolo
         ;;
     rag_interactive)
-        "$PROJECT_ROOT/launcher/rag_interactive_session.sh" "$MODEL"
+        "$PROJECT_ROOT/launcher/rag_interactive_session.sh" "$MODEL" "$YOLO_FLAG"
         ;;
     *)
-        "$GEMINI_CLI" --model "$MODEL"
+        "$GEMINI_CLI" --model "$MODEL" "$YOLO_FLAG"
         ;;
 esac
 

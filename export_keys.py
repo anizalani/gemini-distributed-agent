@@ -16,7 +16,7 @@ def export_keys():
     print("Fetching Gemini API keys...")
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT key_name, key_value FROM api_keys;")
+            cur.execute("SELECT key_name, api_key FROM api_keys;")
             gemini_keys = {row[0]: row[1] for row in cur.fetchall()}
     except Exception as e:
         print(f"Error fetching keys from the database: {e}")

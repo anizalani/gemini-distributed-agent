@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $EUID -ne 0 ]]; then
+  echo "This script needs to run with root privileges to access certain directories."
+  echo "Attempting to re-run with sudo..."
+  exec sudo -E "$0" "$@"
+fi
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # --- Argument Parsing ---
 DIRECT_MODE=""
 DIRECT_MODEL=""
+YOLO_MODE="false"
 
 usage() {
-    echo "Usage: $0 [-r] [-i] [-h] [-c] [-a] [-m <model_name>] [-d | --default]"
+    echo "Usage: $0 [-r] [-i] [-h] [-c] [-a] [-m <model_name>] [-d | --default] [--y]"
     echo "  -r: Run in RAG Interactive Mode"
     echo "  -i: Run in Interactive Mode"
     echo "  -h: Run in Headless Mode"
@@ -16,6 +23,7 @@ usage() {
     echo "  -a: Run in Agentic Mode"
     echo "  -m <model_name>: Specify Gemini model (e.g., gemini-2.5-flash, gemini-2.5-pro). Required for -r and -i."
     echo "  -d, --default: Run in Interactive Mode with gemini-2.5-pro."
+    echo "  --y: Run in YOLO mode (Agentic Mode without prompts)."
     exit 1
 }
 
@@ -57,11 +65,24 @@ while [[ $# -gt 0 ]]; do
         DIRECT_MODEL="gemini-2.5-pro"
         shift # past argument
         ;;
+        --y)
+        YOLO_MODE="true"
+        shift # past argument
+        ;;
         *)    # unknown option
         usage
         ;;
     esac
 done
+
+# If YOLO mode is enabled without a specific mode, default to interactive.
+if [[ "$YOLO_MODE" == "true" && -z "$DIRECT_MODE" ]]; then
+    DIRECT_MODE="interactive"
+    # Default to a model if none is provided, as interactive mode requires it.
+    if [[ -z "$DIRECT_MODEL" ]]; then
+        DIRECT_MODEL="gemini-2.5-pro"
+    fi
+fi
 
 if [[ -n "$DIRECT_MODE" ]]; then
     if [[ ("$DIRECT_MODE" == "rag_interactive" || "$DIRECT_MODE" == "interactive") && -z "$DIRECT_MODEL" ]]; then
@@ -73,10 +94,9 @@ if [[ -n "$DIRECT_MODE" ]]; then
     fi
 fi
 
-if [[ $EUID -ne 0 ]]; then
-  echo "This script needs to run with root privileges to access certain directories."
-  echo "Attempting to re-run with sudo..."
-  exec sudo -E "$0" "$@"
+YOLO_FLAG=""
+if [[ "$YOLO_MODE" == "true" ]]; then
+    YOLO_FLAG="--yolo"
 fi
 
 # --- Paths ---
@@ -200,19 +220,19 @@ if [[ -n "$DIRECT_MODE" ]]; then
     TASK_ID="$(TZ=America/Chicago date +%F-%H%M)"
     case "$DIRECT_MODE" in
         "rag_interactive")
-            "$CODE_DIR/launcher/rag_interactive_session.sh" "$DIRECT_MODEL"
+            "$CODE_DIR/launcher/rag_interactive_session.sh" "$DIRECT_MODEL" "$YOLO_FLAG"
             ;;
         "interactive")
-            "$LAUNCHER" "$TASK_ID" "interactive" "$DIRECT_MODEL"
+            "$LAUNCHER" "$TASK_ID" "interactive" "$DIRECT_MODEL" "$YOLO_FLAG"
             ;;
         "headless")
-            "$LAUNCHER" "$TASK_ID" "headless"
+            "$LAUNCHER" "$TASK_ID" "headless" "" "$YOLO_FLAG"
             ;;
         "context")
-            "$LAUNCHER" "$TASK_ID" "context"
+            "$LAUNCHER" "$TASK_ID" "context" "" "$YOLO_FLAG"
             ;;
         "agentic")
-            "$LAUNCHER" "$TASK_ID" "agentic"
+            "$LAUNCHER" "$TASK_ID" "agentic" "" "$YOLO_FLAG"
             ;;
         *)
             echo "Invalid direct mode: $DIRECT_MODE"
@@ -248,11 +268,11 @@ while true; do
                 select model_opt in "${model_options[@]}"; do
                     case $model_opt in
                         "gemini-2.5-flash")
-                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-flash"
+                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-flash" "$YOLO_FLAG"
                             break
                             ;;
                         "gemini-2.5-pro")
-                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-pro"
+                            "$LAUNCHER" "$TASK_ID" "interactive" "gemini-2.5-pro" "$YOLO_FLAG"
                             break
                             ;;
                         *)
@@ -263,15 +283,15 @@ while true; do
                 break
                 ;;
             "Headless Mode: For single-shot commands.")
-                "$LAUNCHER" "$TASK_ID" "headless"
+                "$LAUNCHER" "$TASK_ID" "headless" "" "$YOLO_FLAG"
                 break
                 ;;
             "Context-Aware Mode: Interactive session with all files in the current directory as context.")
-                "$LAUNCHER" "$TASK_ID" "context"
+                "$LAUNCHER" "$TASK_ID" "context" "" "$YOLO_FLAG"
                 break
                 ;;
             "Agentic Mode: Autonomous execution of a prompt.")
-                "$LAUNCHER" "$TASK_ID" "agentic"
+                "$LAUNCHER" "$TASK_ID" "agentic" "" "$YOLO_FLAG"
                 break
                 ;;
             "RAG Interactive Mode: Interactive session with database-augmented context.")
@@ -284,11 +304,11 @@ while true; do
                 select model_opt in "${model_options[@]}"; do
                     case $model_opt in
                         "gemini-2.5-flash")
-                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-flash"
+                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-flash" "$YOLO_FLAG"
                             break
                             ;;
                         "gemini-2.5-pro")
-                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-pro"
+                            "$CODE_DIR/launcher/rag_interactive_session.sh" "gemini-2.5-pro" "$YOLO_FLAG"
                             break
                             ;;
                         *)
